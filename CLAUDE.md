@@ -52,6 +52,7 @@ Write replays and scratch output outside the repo (or in `replays/`, which is gi
 
 **After every change to this project, add an entry at the top of this list** (date, what changed, why, and how it was verified — e.g. build result and match scores). Keep each entry to a few lines.
 
+- **2026-10-27** — Put the project under git and pushed it to https://github.com/omar0-5/cambc2026-now (branch `main`), on top of the repo's existing initial commit. Merged its C++ `.gitignore` with ours; `.venv/`, `.cambc/`, build output, `compile_commands.json` and `.DS_Store` are not committed. 120 files.
 - **2026-10-27** — Created this CLAUDE.md with project context and this change log.
 - **2026-10-27** — Wrote the strategy document (link above) from a full read of `bots/v15/src`. Found 4 unused constants and a stale comment in `shop.cpp` (listed above). No code changed.
 - **2026-10-27** — Cleaned the repo to v15 only: deleted `bots/my-bot`, `bots/starter-python`, `bots/starter-cpp`, and the OCaml, Python and Rust SDKs and templates. Set `languages = ["cpp"]` in `cambc.toml`. Verified with a clean rebuild and a v15 vs v15 match on 00anvil (2000 rounds, 0 crashes). A backup from before the cleanup was kept in a temporary folder, which may since have been cleared.
