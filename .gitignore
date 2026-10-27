@@ -66,3 +66,14 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# cambc project
+.cambc/
+bots/*/.cambc/
+matches/
+replays/
+bots/*/build/
+bots/*/target/
+.venv/
+compile_commands.json
+.DS_Store
