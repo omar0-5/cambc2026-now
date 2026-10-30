@@ -15,8 +15,10 @@
 
 int main() {
     while (true) {
+        const bool draft = cambc::is_draft();
+        const auto start_round = draft ? 0 : cambc::round_number();
         try {
-            if (cambc::is_draft())
+            if (draft)
                 draft_turn();
             else
                 champion_turn();
@@ -27,6 +29,9 @@ int main() {
         } catch (...) {
             std::cout << "bot error: unknown exception" << std::endl;
         }
+        // A turn that ran out of fuel was suspended and resumed in a later round: log it for the test report.
+        if (!draft && cambc::round_number() != start_round)
+            std::cout << "fuel out: turn of round " << start_round << " ended in round " << cambc::round_number() << std::endl;
         cambc::end_turn();
     }
 }

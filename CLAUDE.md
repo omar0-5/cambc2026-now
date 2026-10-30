@@ -52,6 +52,9 @@ Write replays and scratch output outside the repo (or in `replays/`, which is gi
 
 **After every change to this project, add an entry at the top of this list** (date, what changed, why, and how it was verified — e.g. build result and match scores). Keep each entry to a few lines.
 
+- **2026-10-30** — Wrote the Phase 1 design doc for the advisor's design (modes, Q(a), 64-bit shared memory, belief map): https://claude.ai/artifact/RV3juWzzFKb3Mzy8FA9Vyz. Awaiting approval; no design code yet.
+- **2026-10-30** — Compared v13 and v15 (release, 70 maps, both sides). v13 vs v15: 73–67, +47 gems/match. vs starter: v13 139–1 (+828, 0 errors), v15 139–1 (+768, 99 dash errors). v13 recommended as base and for the ladder; v15 kept until the user confirms. Both bots run out of fuel ~11 turns/match, 60% on 01boss-battle, 00lanes, 01islands.
+- **2026-10-30** — Test setup: froze `bots/v13-baseline` and `bots/v15-baseline`; restored the starter bot as `bots/starter` (gitignored; `cambc init` also re-adds the other-language SDKs, which were deleted again); added `tools/bench.py` (all maps, both sides, per-map CSV). In v13 and v15 `main.cpp` now prints `fuel out: ...` when a turn is suspended; v13's `SHOPLEFT` print is now debug-only.
 - **2026-10-27** — Put the project under git and pushed it to https://github.com/omar0-5/cambc2026-now (branch `main`), on top of the repo's existing initial commit. Merged its C++ `.gitignore` with ours; `.venv/`, `.cambc/`, build output, `compile_commands.json` and `.DS_Store` are not committed. 120 files.
 - **2026-10-27** — Created this CLAUDE.md with project context and this change log.
 - **2026-10-27** — Wrote the strategy document (link above) from a full read of `bots/v15/src`. Found 4 unused constants and a stale comment in `shop.cpp` (listed above). No code changed.

@@ -77,3 +77,5 @@ bots/*/target/
 .venv/
 compile_commands.json
 .DS_Store
+bots/starter/
+.vscode/
