@@ -51,7 +51,7 @@ const DraftSet& draft_set() {
         d.setup4 = {{CT::marcella, 0, Role::TankFarmer}, {CT::vesper_vale, 0, Role::Farmer},
                     {CT::ryth, 0, Role::Farmer},        {CT::vendetta, 0, Role::Farmer}};
         d.setup5 = {{CT::marcella, 0, Role::TankFarmer},   {CT::ryth, 0, Role::Farmer}, {CT::vendetta, 0, Role::Farmer},
-                    {CT::heart_of_ruin, 1, Role::FarPair}, {CT::vesper_vale, 1, Role::FarPair}};
+                    {CT::heart_of_ruin, 0, Role::Farmer}, {CT::vesper_vale, 0, Role::Farmer}};
         return d;
     }();
     static const DraftSet ELITE_MIRROR = [] {
