@@ -8,6 +8,7 @@
 // 25 from theirs has ratio 12 / 37 = 0.32 -> not middle band (0.35..0.65), inside our home region.
 // FUEL: each field costs ~1k (40x40) to ~28k (100x100); build() runs once on the 2x-fuel first turn.
 #include "mapinfo.h"
+#include <iostream>
 #include <algorithm>
 #include <array>
 #include <span>
@@ -32,6 +33,10 @@ struct MapData {
     bc::bitboard safe_altar_ring;               // altar ring of altars outside the enemy zone
     bool thresholds_set = false;
     int d15 = 0, d60 = 0, home_to_altar = FAR_AWAY;
+    // Group setup resumes across turns: the last group in `groups` is unfinished while edge_tile >= 0.
+    int edge_tile = -1;
+    float edge_best = 1e9f;
+    std::uint64_t max_group_cost = 0, max_edge_cost = 0;   // largest step measured this game (fuel)
     vec2 home_centre{}, enemy_centre{};
 };
 
@@ -102,17 +107,15 @@ bool is_group_tile(const GroupInfo& g, vec2 q) {
     return std::find(g.tiles.begin(), g.tiles.end(), q) != g.tiles.end();
 }
 
-// The least damage a melee champion takes standing next to any monster of the group.
-float best_edge_exposure(const GroupInfo& g) {
-    float best = 1e9f;
-    for (vec2 t : g.tiles)
-        for (int dx = -1; dx <= 1; ++dx)
-            for (int dy = -1; dy <= 1; ++dy) {
-                const vec2 q{t.x + dx, t.y + dy};
-                if ((!dx && !dy) || wall_at(q) || is_group_tile(g, q)) continue;
-                best = std::min(best, exposure_at(g, q));
-            }
-    return best >= 1e9f ? g.total_strength : best;
+// The least damage a melee champion takes standing next to any monster of the group: one monster tile's
+// 8 neighbours per call, folded into `best` (the pass is quadratic in tiles, so a big group spans turns).
+void edge_exposure_of_tile(const GroupInfo& g, vec2 t, float& best) {
+    for (int dx = -1; dx <= 1; ++dx)
+        for (int dy = -1; dy <= 1; ++dy) {
+            const vec2 q{t.x + dx, t.y + dy};
+            if ((!dx && !dy) || wall_at(q) || is_group_tile(g, q)) continue;
+            best = std::min(best, exposure_at(g, q));
+        }
 }
 
 // Design stats per camp kind (one engine query per kind instead of one per camp).
@@ -150,7 +153,6 @@ GroupInfo describe_group(const bc::map::camp_group& engine_group, int index) {
         g.has_monolith = g.has_monolith || camp.kind() == bc::camp_type::monolith;
     }
     if (!g.tiles.empty()) g.centre = g.tiles[0];
-    g.edge_strength = best_edge_exposure(g);
     for (vec2 t : g.tiles)
         for (vec2 a : data().altars)
             if (t.chebyshev_distance(a) <= 1) g.gate = true;
@@ -225,16 +227,41 @@ bool load_groups_step() {
         d.camp_spawns.clear();
         d.group_of_tile.assign(static_cast<std::size_t>(d.width * d.height), NO_GROUP);
     }
-    while (d.groups.size() < d.engine_groups.size()) {
-        if (bc::fuel_remaining() < SETUP_FUEL_RESERVE) return false;
+    // A step starts only with the largest such step measured so far + margin left (fix A).
+    auto guard = [](std::uint64_t measured) { return measured ? measured + GROUP_SETUP_MARGIN : GROUP_SETUP_FIRST_GUARD; };
+    while (true) {
+        if (d.edge_tile >= 0) {   // finish the last group's edge pass, one monster tile per step
+            GroupInfo& g = d.groups.back();
+            while (d.edge_tile < static_cast<int>(g.tiles.size())) {
+                const std::uint64_t before = bc::fuel_remaining();
+                if (before < guard(d.max_edge_cost)) return false;
+                edge_exposure_of_tile(g, g.tiles[static_cast<std::size_t>(d.edge_tile)], d.edge_best);
+                d.max_edge_cost = std::max(d.max_edge_cost, before - bc::fuel_remaining());
+                ++d.edge_tile;
+            }
+            g.edge_strength = d.edge_best >= 1e9f ? g.total_strength : d.edge_best;
+            d.edge_tile = -1;
+            // Self-check (debug builds): the resumed pass equals one pass over every tile.
+            debug_block({
+                float best = 1e9f;
+                for (vec2 t : g.tiles) edge_exposure_of_tile(g, t, best);
+                if ((best >= 1e9f ? g.total_strength : best) != g.edge_strength)
+                    std::cout << "MAPINFO CHECK FAILED group " << g.index << " edge " << g.edge_strength << " vs " << best << std::endl;
+            });
+        }
+        if (d.groups.size() >= d.engine_groups.size()) return true;
+        const std::uint64_t before = bc::fuel_remaining();
+        if (before < guard(d.max_group_cost)) return false;
         const std::size_t i = d.groups.size();
         GroupInfo g = describe_group(d.engine_groups[i], static_cast<int>(i));
         d.camp_spawns |= g.spawn;
         for (vec2 t : g.tiles) d.group_of_tile[static_cast<std::size_t>(tile_index(t))] = static_cast<std::int16_t>(i);
         d.any_gate = d.any_gate || g.gate;
         d.groups.push_back(std::move(g));
+        d.max_group_cost = std::max(d.max_group_cost, before - bc::fuel_remaining());
+        d.edge_tile = 0;
+        d.edge_best = 1e9f;
     }
-    return true;
 }
 
 // Altar ring tiles we bank at: every altar outside the enemy zone (all altars if none is outside).

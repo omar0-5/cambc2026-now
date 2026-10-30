@@ -217,6 +217,11 @@ constexpr std::uint64_t FUEL_FOR_RESCORE = 70000;  // skip re-choosing a target 
 constexpr std::uint64_t FUEL_FOR_PATH = 30000;     // skip optional path searches below this
 constexpr std::uint64_t FUEL_FOR_TURN = 60000;     // a normal turn needs about this much (big maps)
 constexpr std::uint64_t SETUP_FUEL_RESERVE = 12000;// stop a setup step with this much fuel left
+// Group setup (fix A, Oct 31): start the next group's step only with (largest step measured this game) +
+// margin left; before any is measured, GROUP_SETUP_FIRST_GUARD. The edge pass resumes per tile.
+// (One group cost up to 27k against the old 12k guard: 140 of 247 overruns on the 5 worst maps.)
+constexpr std::uint64_t GROUP_SETUP_FIRST_GUARD = 30000;
+constexpr std::uint64_t GROUP_SETUP_MARGIN = 5000;
 constexpr std::uint64_t FIELD_FUEL = 60000;
 constexpr std::uint64_t DRAFT_PLAN_RESERVE = 120000;  // draft: write the map plan only with this much left after building it
 constexpr std::uint64_t DRAFT_MAP_START_FUEL = 500000;
