@@ -34,6 +34,7 @@ void note_gold(int gold_now);       // v13: lifetime gold earned (zero-gold capt
 bool farm_step(Snapshot& s);
 // The group this champion is working on this turn (NO_GROUP if none); for the ward and the log.
 int current_group();
+double plan_rounds(const Snapshot& s, int group);   // step d: V(g)'s rounds for my squad (walk, wait, kill, capture, heal)
 void avoid_current(int until_round);
 void avoid_group(int group, int until_round);   // skip this group until that round (watchdog)   // skip the group I work on until that round (walked away from it)
 

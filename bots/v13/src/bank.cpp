@@ -7,10 +7,12 @@
 //   cancel it but a stun, death or a newly placed enemy altar lock does.
 #include "bank.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include "combat.h"
 #include "comms.h"
 #include "config.h"
+#include "level2.h"
 #include "mapinfo.h"
 #include "move.h"
 #include "world.h"
@@ -202,6 +204,58 @@ bool stun_threat(const Snapshot& s) {
 
 }  // namespace
 
+namespace {
+
+// Step d (CARRY): the nearest safe altar (v13's field), the next safe altars (1.2 x straight line: no
+// per-altar field exists), or recall then walk from home - scored with Q = bag - P(death) L_D - T r.
+// The chosen altar is kept for CARRY_KEEP_ROUNDS so two similar altars do not swap every turn.
+bool carry_level2(Snapshot& s) {
+    static int kept_altar = -1, kept_round = -1000;
+    const auto& altars = mapinfo::altars();
+    const bc::bitboard& safe = mapinfo::safe_altar_ring();
+    struct Cand { double q; int altar; double steps; };   // altar -1 = recall
+    std::array<Cand, LEVEL2_CANDIDATES + 1> cands{};
+    int n = 0;
+    auto score = [&](double steps, vec2 dest, double extra_rounds) {
+        level2::Plan p;
+        p.dS = s.bag;
+        p.T = std::max(1.0, steps + extra_rounds + tribute_turns(s.bag));
+        p.p_death = level2::p_death(s, p.T, dest, &p.enemy_share);
+        return level2::q(s, p);
+    };
+    // Nearest first: the field's distance for the nearest safe altar, 1.2 x straight line for the others.
+    std::array<std::pair<double, int>, 16> order{};
+    int m = 0;
+    for (std::size_t i = 0; i < altars.size() && m < 16; ++i) {
+        bc::bitboard ring = move::square(altars[i], 1);
+        ring &= safe;
+        if (ring.is_empty()) continue;
+        order[static_cast<std::size_t>(m++)] = {1.2 * static_cast<double>(altars[i].chebyshev_distance(s.me)), static_cast<int>(i)};
+    }
+    std::sort(order.begin(), order.begin() + m);
+    for (int k = 0; k < m && k < LEVEL2_CANDIDATES; ++k) {
+        const int i = order[static_cast<std::size_t>(k)].second;
+        const double steps = k == 0 ? static_cast<double>(reach_steps(s)) : order[static_cast<std::size_t>(k)].first;
+        cands[static_cast<std::size_t>(n++)] = {score(steps, altars[static_cast<std::size_t>(i)], 0), i, steps};
+    }
+    if (recall_is_safe(s) && mapinfo::home_to_altar_steps() < FAR_AWAY)
+        cands[static_cast<std::size_t>(n++)] = {score(mapinfo::home_to_altar_steps(), mapinfo::home_centre(), RECALL_TURNS), -1, 0};
+    if (n == 0) return move::travel_to_altar(s, altar_goals(s));
+    int best = 0;
+    for (int i = 1; i < n; ++i)
+        if (cands[static_cast<std::size_t>(i)].q > cands[static_cast<std::size_t>(best)].q) best = i;
+    int choice = cands[static_cast<std::size_t>(best)].altar;
+    if (s.round - kept_round <= CARRY_KEEP_ROUNDS && kept_altar >= 0 && choice >= 0) choice = kept_altar;
+    if (choice < 0) { bc::self().recall(); kept_altar = -1; return true; }
+    kept_altar = choice, kept_round = s.round;
+    if (choice == order[0].second) return move::travel_to_altar(s, altar_goals(s));   // v13's field leads there
+    bc::bitboard goals = move::square(altars[static_cast<std::size_t>(choice)], 1);
+    goals &= safe;
+    return move::travel_to_altar(s, goals);
+}
+
+}  // namespace
+
 bool go_tribute(Snapshot& s) {
     if (s.bag <= 0 || reach_steps(s) >= FAR_AWAY) return false;   // nothing to do: let the ladder go on
     // A stun threat makes us wait next to the altar, but at most STUN_WAIT_TURNS turns in a row: a cancelled
@@ -219,6 +273,7 @@ bool go_tribute(Snapshot& s) {
         waited = 0;
         if (tribute_here(s, altar)) return true;
     }
+    if (LEVEL2_CARRY && level2::active()) return carry_level2(s);
     if (recall_is_faster(s) && recall_is_safe(s)) {
         bc::self().recall();
         return true;

@@ -172,6 +172,31 @@ constexpr int SUPPORT_HEAL_RANGE = 4;       // ...within her heal range
 constexpr int SUPPORT_SCORER_BAG = 40;      // SUPPORT (escort, step b): the scorer carries this many gems
 constexpr int SUPPORT_DANGER_RANGE = 10;    // ...and a danger record lies this close to it
 
+// ---- Level 2: Q(a) (design step d) ----------------------------------------------------------------
+constexpr bool LEVEL2_ON = false;              // false = Level 1 only (v13's choice inside each mode). Off: not yet better than step c
+// Per-mode Level 2 switches (each off = v13's choice in that mode). FARM_SQUAD, CARRY and FIGHT lost on the
+// 20-map bisect (Oct 30: -150, -245, -85 gems vs Level 1 +123) with the starting weights: off until lambda tuning.
+constexpr bool LEVEL2_FARM_SQUAD = false;      // the squad chooser's group among the top 3
+constexpr bool LEVEL2_FARM_TURN = true;        // capture here / contest / target, best Q first
+constexpr bool LEVEL2_CARRY = false;           // altar or recall
+constexpr bool LEVEL2_FIGHT = false;           // which enemy to fight
+constexpr bool LEVEL2_RETREAT = true;          // recall / step away / walk home around danger
+constexpr bool LEVEL2_EXPLORE = true;          // stale groups instead of the idle point
+constexpr std::uint64_t LEVEL2_FUEL_FLOOR = 40000;   // below this at Level 2's start, run v13's choice
+constexpr int LEVEL2_CANDIDATES = 3;           // camp groups / altars / stale groups scored per mode
+constexpr double LAMBDA_E = 0.9;               // expected gems: slightly below a scored gem, so banking wins ties
+constexpr double LAMBDA_D = 1.0;               // L_D is already in gems
+constexpr double LAMBDA_T = 1.0;               // C_time is already in gems
+constexpr double INCOME_EARLY = 0.3;           // r before LEVEL2_EARLY_ROUNDS (gems per body-round)
+constexpr int LEVEL2_EARLY_ROUNDS = 100;
+constexpr double INCOME_FLOOR = 0.15;          // r never below this
+constexpr double KILL_GOLD_GEMS = 10;          // the 100 kill gold an enemy gains, at 0.1 gem per gold
+constexpr double RESPAWN_ROUNDS_DEAD = 60;     // rounds dead after a death
+constexpr double P_AVAILABLE_UNKNOWN = 0.5;    // EXPLORE: a stale group is back / alive with this chance
+constexpr double RETREAT_STEP_ROUNDS = 2;     // RETREAT: a step away counts as this many rounds of exposure
+constexpr int CARRY_KEEP_ROUNDS = 10;          // CARRY: keep the chosen altar this long (no swapping between similar ones)
+constexpr double DANGER_UNKNOWN_PLOSE = 0.5;   // a team danger record of unknown type beats me this often
+
 // ---- Belief map (design step a) --------------------------------------------------------------------
 constexpr int SAFE_RING_ROUNDS = 8;      // a tile seen within this many rounds is known safe
 constexpr int STALE_ROUNDS = 40;         // an Alive group unseen this long is stale (EXPLORE re-checks it)
