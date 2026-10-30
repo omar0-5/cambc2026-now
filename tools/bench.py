@@ -67,7 +67,7 @@ def main():
     args = ap.parse_args()
     a, b = (ROOT / args.bot_a).resolve(), (ROOT / args.bot_b).resolve()
     maps = sorted((ROOT / "maps").glob("*.map26a")) if args.maps == "all" else [ROOT / "maps" / f"{m}.map26a" for m in args.maps.split(",")]
-    out = pathlib.Path(args.out) if args.out else ROOT / "replays" / "bench" / f"{a.name}-vs-{b.name}"
+    out = pathlib.Path(args.out).resolve() if args.out else ROOT / "replays" / "bench" / f"{a.name}-vs-{b.name}"   # run-batch needs absolute paths
     out.mkdir(parents=True, exist_ok=True)
     # run-batch refuses to overwrite, and stale files would be parsed as this run's results.
     for old in [*out.glob("*.repl26a"), *out.glob("*.json")]:
