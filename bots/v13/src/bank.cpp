@@ -177,11 +177,13 @@ bool endgame_or_win(const Snapshot& s) {
 
 namespace {
 
-// Next to an altar: tribute (Marcella breaks an enemy lock with basic attacks first).
+// Next to an altar: tribute (an enemy lock is broken with basic attacks first: five hits).
+// Any champion breaks it, not only Marcella: on 02treasure-box Ryth stood next to a locked altar with
+// 400-500 gems for ~1,400 rounds while Marcella farmed elsewhere (step 0c investigation).
 bool tribute_here(Snapshot& s, vec2 altar) {
     auto& me = bc::self();
     if (enemy_locked(altar)) {
-        if (s.my_type != bc::champion_type::marcella || !me.can_attack()) return false;
+        if (!me.can_attack()) return false;
         me.attack(bc::vision::altar_lock_at(altar));
         return true;
     }
