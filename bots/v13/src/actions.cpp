@@ -201,7 +201,9 @@ namespace {
 // One basic attack on the best target in range; true if it landed.
 bool basic_attack_once(Snapshot& s, const Aim& aim) {
     auto& me = bc::self();
-    if (!me.is_alive() || !me.can_attack()) return false;
+    // Step 0: a turn that runs out of fuel between the checks below and attack() resumes next round,
+    // when the target may be dead (00vault r911: attack_bad_target). Skip the hit instead.
+    if (bc::fuel_remaining() < FUEL_FOR_ATTACK || !me.is_alive() || !me.can_attack()) return false;
     s.me = me.position();   // v13 correctness: measure range from where we really are (error 43)
     const int range = me.attack_range();
     int best_enemy = -1;

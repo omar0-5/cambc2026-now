@@ -27,7 +27,6 @@ namespace farm {
 
 namespace {
 int g_last_gold = -1, g_earned = 0;   // v13: lifetime gold earned (zero-gold capture rule)
-bool g_scan_capped = false;           // v13: the current scan is a low-fuel first-target choice
 }
 
 void note_gold(int gold_now) {
@@ -240,9 +239,16 @@ double value_upper_bound(const GroupInfo& g, const Snapshot& s) {
     return reward / std::max(1.0, walk + CAPTURE_ROUNDS);
 }
 
-// Group indices by upper bound, best first.
-std::vector<std::pair<double, int>> by_bound(const Snapshot& s) {
-    std::vector<std::pair<double, int>> order;
+// Group indices by upper bound, best first. Step 0: cached per round and tile - the sort cost ~17k on
+// 01islands and choose_target ran it twice a turn (plus once for the side job).
+const std::vector<std::pair<double, int>>& by_bound(const Snapshot& s) {
+    static std::vector<std::pair<double, int>> order;
+    static int cached_round = -1;
+    static vec2 cached_at{-1, -1};
+    if (cached_round == s.round && cached_at == s.me) return order;
+    cached_round = s.round;
+    cached_at = s.me;
+    order.clear();
     for (const GroupInfo& g : mapinfo::groups())
         if ((g.gems + g.gold) > 0) order.push_back({value_upper_bound(g, s), g.index});
     std::sort(order.begin(), order.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
@@ -255,7 +261,7 @@ int best_group(const Snapshot& s, const SquadStats& squad, const std::vector<int
     double best_value = 0;
     for (const auto& [bound, index] : by_bound(s)) {
         if (bound <= best_value) break;
-        if (g_scan_capped && bc::fuel_remaining() < FUEL_SCAN_FLOOR) break;   // v13: first-target scan only
+        if (bc::fuel_remaining() < FUEL_SCAN_FLOOR) break;   // step 0: every scan stops here, keeping the best so far
         const GroupInfo& g = mapinfo::groups()[static_cast<std::size_t>(index)];
         if (contains(claimed, g.index)) continue;
         if (clusters_only && !g.clusters_only) continue;
@@ -337,7 +343,6 @@ int squad_target(const Snapshot& s) {
     // never tributed). The scan below stops early when fuel runs low, keeping the best group found.
     const std::uint64_t need = target == NO_GROUP ? FUEL_FOR_FIRST_TARGET : FUEL_FOR_RESCORE;
     if (must && bc::fuel_remaining() < need) return target;   // choose next turn
-    g_scan_capped = target == NO_GROUP && bc::fuel_remaining() < FUEL_FOR_RESCORE;
     if (!must && !live_camps_of_group_visible(s, target).empty()) return target;   // mid-fight: keep it
     const int fresh = choose_target(s, s.squad);
     if (fresh == target || fresh == NO_GROUP) {
@@ -658,7 +663,7 @@ int side_job(const Snapshot& s, int squad_goal) {
     double best_value = 0;
     for (const auto& [bound, index] : by_bound(s)) {
         if (bound <= best_value) break;
-        if (g_scan_capped && bc::fuel_remaining() < FUEL_SCAN_FLOOR) break;   // v13: first-target scan only
+        if (bc::fuel_remaining() < FUEL_SCAN_FLOOR) break;   // step 0: every scan stops here, keeping the best so far
         const GroupInfo& g = mapinfo::groups()[static_cast<std::size_t>(index)];
         if (contains(claimed, g.index)) continue;
         if (g.centre.chebyshev_distance(s.me) > SIDE_JOB_RANGE) continue;
@@ -678,7 +683,8 @@ bool farm_step(Snapshot& s) {
     g_current_group = target;
     if (target == NO_GROUP) return false;
     if (!avoided(target) && work_on_group(s, target)) return true;
-    if (!SIDE_JOBS || s.health < 0.6 * s.max_health) return false;
+    // Step 0: the side-job scan costs ~30k; without fuel left to act on it the turn ran out (00lanes).
+    if (!SIDE_JOBS || s.health < 0.6 * s.max_health || bc::fuel_remaining() < FUEL_FOR_SIDE_JOB) return false;
     const int side = side_job(s, target);
     if (side == NO_GROUP) return false;
     g_current_group = side;
