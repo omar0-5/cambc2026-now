@@ -285,11 +285,19 @@ bool maybe_trip(Snapshot& s) {
     if (!mapinfo::in_home(s.me)) return false;
     // A trip costs the recall plus the walk back out: on maps with a far spawn, only when rich.
     if (mapinfo::steps_from_us(s.me) > SHOP_TRIP_STEPS && s.gold < SHOP_RICH_GOLD) return false;
-    const comms::Sighting seen = comms::read_sighting();
+    const comms::Emergency seen = comms::read_emergency();
     if (seen.fresh && seen.pos.chebyshev_distance(s.me) <= 10) return false;
-    // Farming pair: go together (the partner is also home) so neither farms alone.
-    if (s.role == Role::TankFarmer && !comms::flag(comms::FLAG_PARTNER_HOME)) return false;
-    if (s.role == Role::Farmer && !comms::flag(comms::FLAG_MARCELLA_HOME)) return false;
+    // Farming pair: go together so neither farms alone. Step b: the home flags are gone - the partner must
+    // be in sight and in the home region (or dead: it shops at home anyway).
+    if (s.role == Role::TankFarmer || s.role == Role::Farmer) {
+        const Role partner = s.role == Role::TankFarmer ? Role::Farmer : Role::TankFarmer;
+        bool partner_home = false, partner_alive = false;
+        for (bc::champion_type t : world::squad_members(s.squad, true))
+            if (t != s.my_type && world::role_of(t) == partner) partner_alive = true;
+        for (const AllyNow& a : s.allies)
+            if (world::role_of(a.type) == partner && world::squad_of(a.type) == s.squad && mapinfo::in_home(a.pos)) partner_home = true;
+        if (partner_alive && !partner_home) return false;
+    }
     if (!bank::recall_is_safe(s)) return false;
     bc::self().recall();
     return true;

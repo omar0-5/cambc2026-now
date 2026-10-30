@@ -93,7 +93,7 @@ bc::bitboard altar_goals(const Snapshot& s) {
 
 int bag_threshold(const Snapshot& s) {
     int threshold = s.role == Role::Interceptor ? BAG_HOR : (s.role == Role::FarPair ? BAG_FAR : BAG_CI);
-    const comms::Sighting seen = comms::read_sighting();
+    const comms::Emergency seen = comms::read_emergency();
     const bool danger_near = seen.fresh && seen.pos.chebyshev_distance(s.me) <= HELP_RANGE;
     if (s.health < 0.5 * s.max_health || danger_near) threshold /= 2;
     return std::max(1, threshold);

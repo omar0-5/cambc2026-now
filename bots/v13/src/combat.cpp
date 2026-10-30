@@ -329,12 +329,10 @@ FightPlan decide_fight(const Snapshot& s) {
 
 namespace {
 
+// Step b: starting a fight is a help emergency (type 3) at the target (the old focus type is dropped).
 void announce_fight(const Snapshot& s, const EnemyNow& t) {
-    int count = 0;
-    for (const EnemyNow& e : s.enemies) count += e.pos.chebyshev_distance(t.pos) <= ENGAGE_RANGE ? 1 : 0;
-    comms::write_sighting(t.pos, count, t.channeling);
-    comms::set_focus(t.type);
-    comms::set_flag(comms::FLAG_HELP_WANTED, true);
+    (void)s;
+    comms::raise_emergency(comms::EmergencyType::Help, t.pos);
 }
 
 // Cast -> attack -> move, in that order (a ranged champion that walks has no attack left).
@@ -399,8 +397,8 @@ void walk_away_turn(Snapshot& s, const FightPlan& plan) {
 
 // No enemy in sight: answer a fresh call for help nearby (farmers only if very close).
 bool answer_help(Snapshot& s) {
-    const comms::Sighting seen = comms::read_sighting();
-    if (!seen.fresh || !comms::flag(comms::FLAG_HELP_WANTED)) return false;
+    const comms::Emergency seen = comms::read_emergency();
+    if (!seen.fresh || seen.type != comms::EmergencyType::Help) return false;
     const long distance = seen.pos.chebyshev_distance(s.me);
     const bool farmer = s.role == Role::TankFarmer || s.role == Role::Farmer;
     if (distance > (farmer ? FARMER_HELP_RANGE : HELP_RANGE) || distance <= 2) return false;
@@ -422,10 +420,12 @@ bool spawn_hold(Snapshot& s, bool losing) {
     if (s.round - last_hold > 1) hold_since = s.round;
     bool hold = losing;
     if (!hold && s.enemies.empty()) {
-        const comms::Sighting seen = comms::read_sighting();
+        // Step b: the emergency keeps only "1 vs 2+" enemies (type 1 / types 2-3), so 2+ counts as 2.
+        const comms::Emergency seen = comms::read_emergency();
+        const int count = seen.type == comms::EmergencyType::DangerOne ? 1 : 2;
         int allies_home = 1;
         for (const AllyNow& a : s.allies) allies_home += a.pos.chebyshev_distance(s.me) <= 3 ? 1 : 0;
-        hold = seen.fresh && seen.count >= 2 && seen.count > allies_home &&
+        hold = seen.fresh && count >= 2 && count > allies_home &&
                seen.pos.chebyshev_distance(mapinfo::home_centre()) <= SPAWN_HOLD_RANGE;
     }
     if (!hold || s.round - hold_since >= SPAWN_HOLD_MAX) return false;
@@ -443,7 +443,6 @@ bool spawn_hold(Snapshot& s, bool losing) {
 bool handle_enemies(Snapshot& s) {
     if (s.enemies.empty() && spawn_hold(s, false)) return true;
     if (s.enemies.empty()) {
-        if (comms::flag(comms::FLAG_HELP_WANTED) && !comms::read_sighting().fresh) comms::set_flag(comms::FLAG_HELP_WANTED, false);
         s.detail = "help";
         return answer_help(s);
     }

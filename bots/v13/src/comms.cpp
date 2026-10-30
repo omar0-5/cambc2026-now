@@ -5,9 +5,11 @@
 //   (heart_of_ruin = 12, marcella = 7, stellar = 5); total size = 28 + 2*1 + 8*8 = 94 bytes.
 #include "comms.h"
 #include <algorithm>
+#include <iostream>
 #include <span>
 #include "config.h"
 #include "mapinfo.h"
+#include "world.h"
 
 namespace comms {
 namespace {
@@ -25,11 +27,6 @@ std::uint8_t byte_at(const bc::draft_memory_buffer& m, std::size_t i) {
 std::uint16_t u16_at(const bc::draft_memory_buffer& m, std::size_t i) {
     return static_cast<std::uint16_t>(byte_at(m, i) | (byte_at(m, i + 1) << 8));
 }
-
-std::uint8_t shared_byte(int i) { return static_cast<std::uint8_t>(bc::shared_memory[static_cast<std::size_t>(i)]); }
-void write_shared_byte(int i, std::uint8_t v) { bc::shared_memory[static_cast<std::size_t>(i)] = v; }
-
-int target_byte_of_squad(int squad) { return squad == 0 ? 0 : (squad == 1 ? 2 : 3); }
 
 std::uint8_t group_flags(const GroupInfo& g) {
     return static_cast<std::uint8_t>((g.in_enemy_zone ? 1 : 0) | (g.in_home ? 2 : 0) | (g.in_middle_band ? 4 : 0) |
@@ -124,53 +121,209 @@ Plan read_plan() {
     return p;
 }
 
-int squad_target(int squad) { return int(shared_byte(target_byte_of_squad(squad))) - 1; }
+// ---- Shared memory: one 64-bit word (design step b) ----------------------------------------------
+
+namespace {
+
+struct Field { int shift, bits; };
+constexpr Field CLAIM0{0, 7}, CLAIM1{7, 7}, SPLIT{14, 7}, SCOUT{21, 3}, SCORER{24, 3};
+constexpr Field OBJ_TYPE{27, 2}, OBJ_X{29, 7}, OBJ_Y{36, 7}, OBJ_STAMP{43, 2};
+constexpr Field EM_TYPE{45, 2}, EM_X{47, 7}, EM_Y{54, 7}, EM_STAMP{61, 3};
+// Stored as value + 1 with 0 = none, so the all-zero memory a game starts with means "nothing claimed"
+// (with 127 = none, a zeroed word read as "every claim is group 0" and squad 0 chased group 0).
+constexpr int MAX_CLAIM = 126, MAX_BODY = 6;
+
+struct Word {
+    std::uint64_t value = 0;   // as read at turn start, plus my own writes
+    std::uint64_t mine = 0;    // mask of the bits I wrote this turn
+};
+
+Word& word() {
+    static Word w;
+    return w;
+}
+
+std::uint64_t mask_of(Field f) { return ((std::uint64_t{1} << f.bits) - 1) << f.shift; }
+int get(Field f) { return static_cast<int>((word().value >> f.shift) & ((std::uint64_t{1} << f.bits) - 1)); }
+
+void put(Field f, int v) {
+    Word& w = word();
+    const std::uint64_t m = mask_of(f);
+    w.value = (w.value & ~m) | ((static_cast<std::uint64_t>(v) << f.shift) & m);
+    w.mine |= m;
+}
+
+std::uint64_t read_word() {
+    std::array<std::byte, 8> bytes{};
+    bc::shared_memory.read(0, std::span<std::byte>(bytes));
+    std::uint64_t v = 0;
+    for (std::size_t i = 0; i < 8; ++i) v |= static_cast<std::uint64_t>(std::to_integer<std::uint8_t>(bytes[i])) << (8 * i);
+    return v;
+}
+
+int round_now() { return static_cast<int>(bc::round_number()); }
+bool on_map(int x, int y) { return x >= 0 && y >= 0 && x < bc::map::width() && y < bc::map::height(); }
+
+int group_or_none(int stored) {
+    const int g = stored - 1;
+    return (g < 0 || g >= static_cast<int>(mapinfo::groups().size())) ? NO_GROUP : g;
+}
+
+int body_or_none(int stored) {
+    const int b = stored - 1;
+    return (b < 0 || b >= body_count()) ? -1 : b;
+}
+
+int claim_value(int group) { return group < 0 || group > MAX_CLAIM ? 0 : group + 1; }
+int body_value(int body) { return body < 0 || body > MAX_BODY ? 0 : body + 1; }
+
+}  // namespace
+
+void begin_turn() {
+    Word& w = word();
+    w.value = read_word();
+    w.mine = 0;
+    // Self-check (debug builds, once): every field round-trips through the 64-bit word.
+    debug_block({
+        static bool checked = false;
+        if (!checked && !mapinfo::groups().empty()) {
+            checked = true;
+            const Word saved = w;
+            const int g = static_cast<int>(mapinfo::groups().size()) - 1;
+            set_squad_target(0, g); set_squad_target(1, 0); set_split_target(NO_GROUP);
+            set_roles(body_count() - 1, -1);
+            write_objective(ObjectiveType::Regroup, vec2{bc::map::width() - 1, bc::map::height() - 1});
+            put(EM_TYPE, 0);
+            raise_emergency(EmergencyType::DangerMany, vec2{3, 5});
+            const Objective o = read_objective();
+            const Emergency e = read_emergency();
+            const bool ok = squad_target(0) == g && squad_target(1) == 0 && split_target() == NO_GROUP &&
+                            scout_body() == body_count() - 1 && scorer_body() == -1 && o.valid && o.type == ObjectiveType::Regroup &&
+                            o.pos == vec2{bc::map::width() - 1, bc::map::height() - 1} && e.fresh && e.type == EmergencyType::DangerMany &&
+                            e.pos == vec2{3, 5} && e.age == 0;
+            std::cout << (ok ? "COMMS SELF-CHECK OK" : "COMMS SELF-CHECK FAILED") << std::endl;
+            w = saved;
+        }
+    });
+}
+
+// Merge into a fresh read, so a teammate who wrote while this turn was suspended keeps its fields.
+void end_turn() {
+    Word& w = word();
+    if (w.mine == 0) return;
+    const std::uint64_t now = (read_word() & ~w.mine) | (w.value & w.mine);
+    std::array<std::byte, 8> bytes{};
+    for (std::size_t i = 0; i < 8; ++i) bytes[i] = static_cast<std::byte>((now >> (8 * i)) & 0xFF);
+    bc::shared_memory.write(0, std::span<const std::byte>(bytes));
+    w.value = now;
+    w.mine = 0;
+}
+
+int squad_target(int squad) {
+    if (squad == 0) return group_or_none(get(CLAIM0));
+    if (squad == 1) return group_or_none(get(CLAIM1));
+    return NO_GROUP;   // no draft set has a third squad (the old byte 3 was never used)
+}
 
 void set_squad_target(int squad, int group) {
-    write_shared_byte(target_byte_of_squad(squad), static_cast<std::uint8_t>(group < 0 ? 0 : group + 1));
+    if (squad != 0 && squad != 1) return;
+    put(squad == 0 ? CLAIM0 : CLAIM1, claim_value(group));
 }
 
-int split_target() { return int(shared_byte(1)) - 1; }
-void set_split_target(int group) { write_shared_byte(1, static_cast<std::uint8_t>(group < 0 ? 0 : group + 1)); }
+int split_target() { return group_or_none(get(SPLIT)); }
+void set_split_target(int group) { put(SPLIT, claim_value(group)); }
 
-Sighting read_sighting() {
-    Sighting s;
-    const std::uint8_t x = shared_byte(4), y = shared_byte(5), info = shared_byte(6);
-    if (x == 255) return s;
-    s.pos = vec2{x, y};
-    s.count = info & 7;
-    s.channeling = (info >> 3) & 1;
-    s.age = (static_cast<int>(bc::round_number()) - (info >> 4)) & 15;
-    s.fresh = s.count > 0 && s.age <= SIGHTING_FRESH;
-    return s;
+int scout_body() { return body_or_none(get(SCOUT)); }
+int scorer_body() { return body_or_none(get(SCORER)); }
+
+void set_roles(int scout, int scorer) {
+    put(SCOUT, body_value(scout));
+    put(SCORER, body_value(scorer));
 }
 
-void write_sighting(vec2 pos, int count, bool channeling) {
-    write_shared_byte(4, static_cast<std::uint8_t>(pos.x));
-    write_shared_byte(5, static_cast<std::uint8_t>(pos.y));
-    const int stamp = static_cast<int>(bc::round_number()) & 15;
-    write_shared_byte(6, static_cast<std::uint8_t>(std::min(count, 7) | (channeling ? 8 : 0) | (stamp << 4)));
+Objective read_objective() {
+    Objective o;
+    const int age = (round_now() - get(OBJ_STAMP)) & 3;
+    const int x = get(OBJ_X), y = get(OBJ_Y);
+    if (age > OBJECTIVE_VALID_AGE || !on_map(x, y)) return o;
+    o.valid = true;
+    o.type = static_cast<ObjectiveType>(get(OBJ_TYPE));
+    o.pos = vec2{x, y};
+    return o;
 }
 
-int focus_type() {
-    const int t = (shared_byte(7) & 15) - 1;
-    if (t < 0 || !read_sighting().fresh) return -1;
-    return t;
+void write_objective(ObjectiveType type, vec2 pos) {
+    put(OBJ_TYPE, static_cast<int>(type));
+    put(OBJ_X, std::clamp(pos.x, 0, 127));
+    put(OBJ_Y, std::clamp(pos.y, 0, 127));
+    put(OBJ_STAMP, round_now() & 3);
 }
 
-void set_focus(bc::champion_type enemy) {
-    const std::uint8_t old = shared_byte(7);
-    const int value = (static_cast<int>(enemy) + 1) & 15;
-    write_shared_byte(7, static_cast<std::uint8_t>((old & 0xF0) | value));
+Emergency read_emergency() {
+    Emergency e;
+    const EmergencyType type = static_cast<EmergencyType>(get(EM_TYPE));
+    const int x = get(EM_X), y = get(EM_Y);
+    if (type == EmergencyType::None || !on_map(x, y)) return e;
+    e.type = type;
+    e.pos = vec2{x, y};
+    e.age = (round_now() - get(EM_STAMP)) & 7;
+    e.fresh = e.age <= EMERGENCY_FRESH_AGE;
+    return e;
 }
 
-bool flag(int bit) { return (shared_byte(7) >> bit) & 1; }
+void raise_emergency(EmergencyType type, vec2 pos) {
+    const Emergency current = read_emergency();
+    if (current.fresh && static_cast<int>(type) <= static_cast<int>(current.type)) return;   // only a higher type, or over a stale one
+    put(EM_TYPE, static_cast<int>(type));
+    put(EM_X, std::clamp(pos.x, 0, 127));
+    put(EM_Y, std::clamp(pos.y, 0, 127));
+    put(EM_STAMP, round_now() & 7);
+}
 
-void set_flag(int bit, bool value) {
-    const std::uint8_t old = shared_byte(7);
-    const std::uint8_t mask = static_cast<std::uint8_t>(1 << bit);
-    const std::uint8_t now = value ? static_cast<std::uint8_t>(old | mask) : static_cast<std::uint8_t>(old & ~mask);
-    if (now != old) write_shared_byte(7, now);
+// Body order: champion type value from the draft plan. Body slots ARE type values (types.h), so walking
+// the slots in order gives the order, and Cassi (lower type value) comes before Issac. Without a plan
+// the allies list gives the same order on every teammate. Unit ids would break a tie of equal type
+// values, which one team cannot have.
+namespace {
+struct BodyOrder { bool built = false; int count = 0; std::array<int, BODY_SLOTS> index_of{}; std::array<int, BODY_SLOTS> slot_at{}; };
+
+const BodyOrder& body_order() {
+    static BodyOrder o;
+    if (o.built) return o;
+    o.index_of.fill(-1);
+    o.slot_at.fill(-1);
+    std::array<bool, BODY_SLOTS> present{};
+    const Plan& plan = world::plan();
+    if (plan.valid) {
+        for (int slot = 0; slot < BODY_SLOTS; ++slot) present[static_cast<std::size_t>(slot)] = plan.type_of_slot[static_cast<std::size_t>(slot)] != UNUSED_SLOT;
+    } else {
+        for (const bc::champion& c : bc::champions(bc::team::ally)) {
+            const int slot = body_slot_of(c.champion_name());
+            if (slot != NO_SLOT) present[static_cast<std::size_t>(slot)] = true;
+        }
+    }
+    for (int slot = 0; slot < BODY_SLOTS; ++slot)
+        if (present[static_cast<std::size_t>(slot)]) {
+            o.index_of[static_cast<std::size_t>(slot)] = o.count;
+            o.slot_at[static_cast<std::size_t>(o.count)] = slot;
+            ++o.count;
+        }
+    o.built = true;
+    return o;
+}
+}  // namespace
+
+int body_index(bc::champion_type type) {
+    const int slot = body_slot_of(type);
+    return slot == NO_SLOT ? -1 : body_order().index_of[static_cast<std::size_t>(slot)];
+}
+
+int body_count() { return body_order().count; }
+
+bc::champion_type body_type(int index) {
+    const BodyOrder& o = body_order();
+    if (index < 0 || index >= o.count) return bc::champion_type::marcella;
+    return static_cast<bc::champion_type>(o.slot_at[static_cast<std::size_t>(index)]);
 }
 
 }  // namespace comms

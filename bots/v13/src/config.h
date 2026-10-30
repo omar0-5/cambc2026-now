@@ -93,7 +93,11 @@ constexpr double PRISM_BANK_FACTOR = 2.0; // carried gems are +1.5 Focus each: P
 // ---- Fighting champions [S6] ---------------------------------------------------------------
 constexpr double PWIN_FIGHT = 0.60;    // fight only if our chance to win the kill race is at least this
 constexpr double ETA_UNSEEN = 7.0;     // rounds for an alive-but-unseen enemy to arrive and help
-constexpr int SIGHTING_FRESH = 3;      // rounds a shared sighting stays useful
+constexpr int EMERGENCY_FRESH_AGE = 3;  // step b: a shared emergency is fresh at age <= this (stamp mod 8)
+constexpr int OBJECTIVE_VALID_AGE = 1;  // step b: the leader's objective is valid at age <= this (stamp mod 4)
+constexpr int SCOUT_MIN_BODIES = 4;                   // step b: a scout is named only with this many bodies alive
+constexpr int JUNGLE_RECHECK_ROUNDS = 25;              // step b: re-read Marcella's items (when in sight) this often
+constexpr std::uint64_t JOIN_CHECK_FUEL = 10000;        // step b: the leader's join check costs about this much
 constexpr int HELP_RANGE = 10;         // steps within which teammates react to a sighting
 constexpr double RACE_SOFTNESS = 1.0;  // s_w in p_win: how sharp the logistic curve is (rounds)
 constexpr int ENGAGE_RANGE = 8;        // enemies within this many tiles take part in a fight

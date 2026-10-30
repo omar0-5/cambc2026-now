@@ -15,6 +15,7 @@
 #include <iostream>
 #include "actions.h"
 #include "bank.h"
+#include "belief.h"
 #include "combat.h"
 #include "comms.h"
 #include "config.h"
@@ -140,6 +141,23 @@ bool target_finished(const Snapshot& s, int g) {
 
 namespace {
 
+// Step b: Marcella's Jungle emblem, read from her items when she is in sight (the shared flag bit is
+// gone), then cached for JUNGLE_RECHECK_ROUNDS.
+bool marcella_has_jungle(const Snapshot& s) {
+    static bool cached = false;
+    static int checked = -1000;
+    if (s.my_type == bc::champion_type::marcella) return has_jungle_emblem();
+    if (s.round - checked < JUNGLE_RECHECK_ROUNDS) return cached;
+    for (const AllyNow& a : s.allies) {
+        if (a.type != bc::champion_type::marcella || !a.handle.is_visible()) continue;
+        const auto counts = a.handle.item_count();
+        cached = counts[bc::item_type::jungle_emblem_of_health] + counts[bc::item_type::jungle_emblem_of_strength] +
+                 counts[bc::item_type::jungle_emblem_of_focus] > 0;
+        checked = s.round;
+    }
+    return cached;
+}
+
 SquadStats stats_of_members(const Snapshot& s, std::vector<bc::champion_type> members) {
     SquadStats st;
     st.members = std::move(members);
@@ -158,7 +176,7 @@ SquadStats stats_of_members(const Snapshot& s, std::vector<bc::champion_type> me
     st.tank_max_health = st.tank == s.my_type ? s.max_health : tank_base.base_health;
     st.tank_health = st.tank == s.my_type ? s.health : st.tank_max_health;
     st.tank_has_jungle = st.tank == s.my_type ? has_jungle_emblem()
-                                              : (st.tank == bc::champion_type::marcella && comms::flag(comms::FLAG_MARCELLA_JUNGLE));
+                                              : (st.tank == bc::champion_type::marcella && marcella_has_jungle(s));
     return st;
 }
 
@@ -292,29 +310,52 @@ bool join_is_better(const Snapshot& s, int squad, int join, int alone) {
     return group_value(g, together, s) > apart;
 }
 
-int choose_target(const Snapshot& s, int squad) {
-    // v12 harassment merge: while an enemy kill squad is taking us apart (match 8d0f4189: 21 deaths
-    // with the pair farming alone across the map), squad 1 farms squad 0's group - five bodies are
-    // not free kills. Deaths only count with a recent enemy sighting: on big monster maps (expanse,
-    // the-farm) camp deaths alone must not merge the squads - the split IS the throughput there
-    // (bench Oct 26: without this gate v12 lost both sides on 17 of 70 maps).
-    // Hysteresis: once merged, stay merged for two windows after the last death.
+// v12 harassment merge: while an enemy kill squad is taking us apart (match 8d0f4189: 21 deaths with
+// the pair farming alone across the map), squad 1 farms squad 0's group - five bodies are not free kills.
+// Deaths only count with a recent enemy sighting: on big monster maps (expanse, the-farm) camp deaths
+// alone must not merge the squads - the split IS the throughput there (bench Oct 26: without this gate
+// v12 lost both sides on 17 of 70 maps). Hysteresis: once merged, stay merged for two windows after the
+// last death. Step b: "recent sighting" = a threat record in the belief map (they last 15 rounds); the
+// leader evaluates this and writes objective type 3.
+bool harassment_merge() {
     static int merged_until = -1;
-    if (squad != 0) {
-        const comms::Sighting seen = comms::read_sighting();
-        if (world::team_deaths_since(g_round - HARASS_WINDOW) >= HARASS_DEATHS && seen.age <= 15)
-            merged_until = g_round + 2 * HARASS_WINDOW;
-        if (g_round < merged_until) {
-            const int join = comms::squad_target(0);
-            if (join != NO_GROUP) return join;
-        }
+    bool sighted = false;
+    for (const belief::Threat& t : belief::threats()) sighted = sighted || t.used;
+    if (world::team_deaths_since(g_round - HARASS_WINDOW) >= HARASS_DEATHS && sighted) merged_until = g_round + 2 * HARASS_WINDOW;
+    return g_round < merged_until;
+}
+
+// Step b, the leader: should squad 1 join squad 0's group (v13's join check)? Re-evaluated every
+// RESCORE_ROUNDS with fuel to spare (it costs ~9k), cached in between.
+bool squad1_should_join(const Snapshot& s) {
+    static bool cached = false;
+    static int checked = -1000;
+    if (s.round - checked < RESCORE_ROUNDS || bc::fuel_remaining() < FUEL_SCAN_FLOOR + JOIN_CHECK_FUEL) return cached;
+    checked = s.round;
+    const int join = comms::squad_target(0);
+    cached = join != NO_GROUP && join != comms::squad_target(1) && join_is_better(s, 1, join, comms::squad_target(1));
+    return cached;
+}
+
+int choose_target(const Snapshot& s, int squad) {
+    // Step b: squad 1 follows the leader's objective when it is valid (merge = 3, join = 2, none = 0);
+    // without one (stale, garbage, no leader) it runs v13's own checks.
+    const comms::Objective order = squad != 0 ? comms::read_objective() : comms::Objective{};
+    if (squad != 0 && order.valid) {
+        const bool join_order = order.type == comms::ObjectiveType::Regroup || order.type == comms::ObjectiveType::PriorityCamp;
+        const int g = join_order ? mapinfo::group_at(order.pos) : NO_GROUP;
+        if (g != NO_GROUP) return g;
+    }
+    if (squad != 0 && !order.valid && harassment_merge()) {
+        const int join = comms::squad_target(0);
+        if (join != NO_GROUP) return join;
     }
     const SquadStats st = squad_stats(s, squad);
     const std::vector<int> claimed = claimed_by_others(squad);
     int best = best_group(s, st, claimed, true, false);
     if (best == NO_GROUP) best = best_group(s, st, claimed, false, false);   // anything we can take
     const int join = comms::squad_target(0);
-    if (squad != 0 && join != NO_GROUP && join != best && join_is_better(s, squad, join, best)) best = join;
+    if (squad != 0 && !order.valid && join != NO_GROUP && join != best && join_is_better(s, squad, join, best)) best = join;
     return best;
 }
 
@@ -333,7 +374,17 @@ bool i_choose_for_squad(const Snapshot& s) {
 int squad_target(const Snapshot& s) {
     int target = comms::squad_target(s.squad);
     const bool chooser = i_choose_for_squad(s);
-    const bool must = target == NO_GROUP || target_finished(s, target);
+    // Step b conflict rule: a claim equal to a lower field's (squad 0 < squad 1) is given up and re-chosen -
+    // unless it is a join (the leader's valid objective names that group; without an objective, v13's own
+    // merge / join checks are the only way squad 1 gets squad 0's group, so it stands).
+    bool conflict = false;
+    if (s.squad == 1 && target != NO_GROUP && target == comms::squad_target(0)) {
+        const comms::Objective order = comms::read_objective();
+        const bool join_order = order.valid && (order.type == comms::ObjectiveType::Regroup || order.type == comms::ObjectiveType::PriorityCamp) &&
+                                mapinfo::group_at(order.pos) == target;
+        conflict = order.valid && !join_order;
+    }
+    const bool must = target == NO_GROUP || target_finished(s, target) || conflict;
     static int last_rescore = -100;
     const bool periodic = chooser && s.round - last_rescore >= RESCORE_ROUNDS && bc::fuel_remaining() > FUEL_FOR_RESCORE;
     if (periodic) last_rescore = s.round;
@@ -367,7 +418,8 @@ int split_target(const Snapshot& s, int squad_goal) {
     const bool squad_on_clusters = squad_goal == NO_GROUP || mapinfo::groups()[static_cast<std::size_t>(squad_goal)].clusters_only;
     if (!squad_on_clusters) { comms::set_split_target(NO_GROUP); return squad_goal; }
     int mine = comms::split_target();
-    if (mine == NO_GROUP || target_finished(s, mine) || mine == squad_goal) {
+    if (mine == NO_GROUP || target_finished(s, mine) || mine == squad_goal || mine == comms::squad_target(0) ||
+        mine == comms::squad_target(1)) {   // step b: the split field is the lowest-priority claim
         SquadStats solo;
         solo.members = {s.my_type};
         solo.dps = combat::damage_per_round(s.my_type, s.strength, s.focus);
@@ -679,6 +731,7 @@ int side_job(const Snapshot& s, int squad_goal) {
 
 bool farm_step(Snapshot& s) {
     int target = squad_target(s);
+    if (target != NO_GROUP && i_choose_for_squad(s)) comms::set_squad_target(s.squad, target);   // step b: re-assert the claim
     if (s.role == Role::Farmer) target = split_target(s, target);
     g_current_group = target;
     if (target == NO_GROUP) return false;

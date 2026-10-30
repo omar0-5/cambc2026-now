@@ -183,18 +183,16 @@ void update_groups(const Snapshot& s) {
     }
 }
 
-// Tell the team where enemies are (bytes 4-6), nearest enemy first [S10].
+// Step b emergency: an enemy within 8 tiles is danger (type 1, or 2 with 2+ enemies) at the nearest one.
 void write_sighting(const Snapshot& s) {
     const EnemyNow* nearest = nullptr;
     int count = 0;
-    bool channeling = false;
     for (const EnemyNow& e : s.enemies) {
         if (e.on_their_spawn || e.pos.chebyshev_distance(s.me) > 8) continue;
         ++count;
-        channeling = channeling || e.channeling;
         if (!nearest || e.pos.chebyshev_distance(s.me) < nearest->pos.chebyshev_distance(s.me)) nearest = &e;
     }
-    if (nearest) comms::write_sighting(nearest->pos, count, channeling);
+    if (nearest) comms::raise_emergency(count >= 2 ? comms::EmergencyType::DangerMany : comms::EmergencyType::DangerOne, nearest->pos);
 }
 
 void log_groups(const WorldData& d) {

@@ -13,6 +13,7 @@
 #include <vector>
 #include "actions.h"
 #include "bank.h"
+#include "belief.h"
 #include "combat.h"
 #include "comms.h"
 #include "config.h"
@@ -226,14 +227,59 @@ void place_ward(const Snapshot& s) {
     if (best != s.me) me.place_ward(best);
 }
 
-void write_flags(const Snapshot& s, bool dead) {
-    const bool home = dead || s.on_our_spawn || mapinfo::in_home(s.me);
-    if (s.role == Role::TankFarmer) comms::set_flag(comms::FLAG_MARCELLA_HOME, home);
-    if (s.my_type == bc::champion_type::marcella && s.on_our_spawn) {
-        const auto items = bc::self().item_count();
-        comms::set_flag(comms::FLAG_MARCELLA_JUNGLE, items[bc::item_type::jungle_emblem_of_health] > 0);
+// ---- Step b: shared-memory duties ----------------------------------------------------------------
+
+int lowest_slot_alive(int squad) {
+    int best = NO_SLOT;
+    for (bc::champion_type t : world::squad_members(squad, true))
+        if (best == NO_SLOT || body_slot_of(t) < best) best = body_slot_of(t);
+    return best;
+}
+
+// Scout: with 4+ bodies alive and a stale valuable group, the alive body outside the tank's squad with
+// the smallest bag. Bags are known for me and allies in sight; unknown bags rank after known ones.
+int choose_scout(const Snapshot& s) {
+    int alive = 0;
+    for (int i = 0; i < comms::body_count(); ++i) alive += world::ally_alive(comms::body_type(i)) ? 1 : 0;
+    if (alive < SCOUT_MIN_BODIES) return -1;
+    bool stale = false;
+    for (const GroupInfo& g : mapinfo::groups()) stale = stale || (g.gems + g.gold > 0 && belief::group_stale(g, s.round));
+    if (!stale) return -1;
+    int best = -1, best_bag = 1 << 30;
+    for (int i = 0; i < comms::body_count(); ++i) {
+        const bc::champion_type t = comms::body_type(i);
+        if (!world::ally_alive(t) || world::squad_of(t) == 0) continue;
+        int bag = (1 << 29) + i;   // unknown
+        if (t == s.my_type) bag = s.bag;
+        for (const AllyNow& a : s.allies)   // seen at turn start; we may have walked out of sight since
+            if (a.type == t && a.handle.is_visible()) bag = static_cast<int>(a.handle.gem_count());
+        if (bag < best_bag) best_bag = bag, best = i;
     }
-    if (s.role == Role::Farmer) comms::set_flag(comms::FLAG_PARTNER_HOME, home);
+    return best;
+}
+
+// The leader (lowest body index alive; alive flags need no vision) writes scout, scorer and objective.
+void lead(const Snapshot& s) {
+    const int capturer = lowest_slot_alive(0);   // scorer = squad 0's capturer (v13: the lowest slot keeps the tile)
+    comms::set_roles(choose_scout(s), capturer == NO_SLOT ? -1 : comms::body_index(static_cast<bc::champion_type>(capturer)));
+    const int squad0 = comms::squad_target(0);
+    const vec2 at = squad0 == NO_GROUP ? vec2{0, 0} : mapinfo::groups()[static_cast<std::size_t>(squad0)].centre;
+    if (squad0 != NO_GROUP && farm::harassment_merge()) comms::write_objective(comms::ObjectiveType::Regroup, at);
+    else if (squad0 != NO_GROUP && lowest_slot_alive(1) != NO_SLOT && farm::squad1_should_join(s)) comms::write_objective(comms::ObjectiveType::PriorityCamp, at);
+    else comms::write_objective(comms::ObjectiveType::None, vec2{0, 0});
+}
+
+void write_shared(const Snapshot& s, bool dead) {
+    if (dead) {
+        // A dead chooser clears its own claim; the next lowest slot alive re-asserts one on its turn.
+        const int lowest = lowest_slot_alive(s.squad);
+        if (lowest == NO_SLOT || s.my_slot < lowest) comms::set_squad_target(s.squad, NO_GROUP);
+        return;
+    }
+    int leader = -1;
+    for (int i = 0; i < comms::body_count() && leader < 0; ++i)
+        if (world::ally_alive(comms::body_type(i))) leader = i;
+    if (leader >= 0 && leader == comms::body_index(s.my_type)) lead(s);
 }
 
 void log_turn(const Snapshot& s) {
@@ -331,7 +377,7 @@ void champion_turn() {
     if (!me.is_alive()) {                                            // 1
         const Snapshot s = dead_snapshot();
         shop::buy_all(s);
-        write_flags(s, true);
+        write_shared(s, true);
         return;
     }
     if (channeling_or_stunned()) return;                             // 2
@@ -343,14 +389,14 @@ void champion_turn() {
     if (s.on_our_spawn) {                                            // 3
         shop::buy_all(s);
         s.gold = static_cast<int>(me.gold_count());
-        if (needs_heal(s)) { s.step = "heal"; hit_what_is_in_range(s); write_flags(s, false); log_turn(s); return; }
+        if (needs_heal(s)) { s.step = "heal"; hit_what_is_in_range(s); write_shared(s, false); log_turn(s); return; }
     }
     ladder(s);
     const bool channel_started = me.is_recalling() || me.is_submitting_gems();
     watchdog(s, channel_started);
     g_stage = "ward";
     if (!channel_started && bc::fuel_remaining() > FUEL_FOR_WARD) place_ward(s);   // 11
-    write_flags(s, false);                                           // 12
+    write_shared(s, false);                                           // 12
     debug_block({
         last.step = s.step ? s.step : ""; last.detail = s.detail ? s.detail : ""; last.hp = static_cast<int>(s.health);
         last.hpf = static_cast<float>(s.health / std::max(1.0, static_cast<double>(s.max_health))); last.bag = s.bag; last.round = s.round;

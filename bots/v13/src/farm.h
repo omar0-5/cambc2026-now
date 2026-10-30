@@ -26,6 +26,8 @@ SquadStats squad_stats(const Snapshot& s, int squad);
 double group_value(const GroupInfo& g, const SquadStats& squad, const Snapshot& s);
 bool group_feasible(const GroupInfo& g, const SquadStats& squad);   // tank damage <= share x tank health
 int choose_target(const Snapshot& s, int squad);                    // skips claimed groups, zone rule
+bool harassment_merge();                                            // step b: v12 merge condition (leader / fallback)
+bool squad1_should_join(const Snapshot& s);                         // step b: v13 join check, cached (leader)
 
 // Ladder step 9: we stand on a cleared group's spawn tile -> stay until the reward is ours.
 bool finish_capture(Snapshot& s);

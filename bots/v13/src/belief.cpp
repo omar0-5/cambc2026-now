@@ -48,9 +48,9 @@ void update_threats(BeliefData& d, const Snapshot& s) {
     for (const EnemyNow& e : s.enemies)
         if (!e.on_their_spawn)
             upsert(d, static_cast<int>(e.type), e.pos, s.round, 1, ThreatSource::OwnSight, std::max(e.attack_range, 4));
-    // Team source: until step b's emergency field exists, v13's shared sighting (bytes 4-6).
-    const comms::Sighting seen = comms::read_sighting();
-    if (seen.fresh) upsert(d, -1, seen.pos, s.round - seen.age, seen.count, ThreatSource::Team, 4);
+    // Team source: the shared emergency (step b). Its count is only "1 vs 2+".
+    const comms::Emergency seen = comms::read_emergency();
+    if (seen.fresh) upsert(d, -1, seen.pos, s.round - seen.age, seen.type == comms::EmergencyType::DangerOne ? 1 : 2, ThreatSource::Team, 4);
     for (Threat& t : d.threat)
         if (t.used && s.round - t.round > THREAT_DROP_ROUNDS) t.used = false;
 }
