@@ -164,6 +164,14 @@ constexpr std::uint64_t FUEL_SCAN_FLOOR = 25000;         // v13: the group scan 
 constexpr std::uint64_t FUEL_FOR_ATTACK = 5000;          // step 0: enough to finish one basic attack
 constexpr std::uint64_t FUEL_FOR_SIDE_JOB = 60000;       // step 0: side-job scan (~30k) + acting on it (~20k)
 
+// ---- Level 1 modes (design step c) ----------------------------------------------------------------
+constexpr bool USE_STEP_B_FIELDS = false;   // rules reading scout / scorer / objective / help emergency: off until step b passes
+constexpr int MODE_HOLD_TURNS = 3;          // FARM, EXPLORE and SUPPORT are kept this many turns once chosen
+constexpr float SUPPORT_HEAL_MISSING = 60;  // SUPPORT (Willow): an ally in range missing this much health
+constexpr int SUPPORT_HEAL_RANGE = 4;       // ...within her heal range
+constexpr int SUPPORT_SCORER_BAG = 40;      // SUPPORT (escort, step b): the scorer carries this many gems
+constexpr int SUPPORT_DANGER_RANGE = 10;    // ...and a danger record lies this close to it
+
 // ---- Belief map (design step a) --------------------------------------------------------------------
 constexpr int SAFE_RING_ROUNDS = 8;      // a tile seen within this many rounds is known safe
 constexpr int STALE_ROUNDS = 40;         // an Alive group unseen this long is stale (EXPLORE re-checks it)

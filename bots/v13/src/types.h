@@ -139,6 +139,7 @@ struct Snapshot {                   // rebuilt every turn by world::sense()
     bool cast_exclusive = false;          // we cast an "excludes walking" spell: no walking this turn
     bool moved = false;                   // we walked or dashed: no "excludes walking" spell this turn
     const char* step = "";                // ladder step taken this turn (debug log)
+    const char* mode = "";                // step c Level 1 mode chosen this turn (debug log)
     const char* detail = "";              // finer step inside farming (walk / hold / fight / capture)
     bool hit = false;                     // we damaged something this turn (debug log)
     std::vector<EnemyNow> enemies;

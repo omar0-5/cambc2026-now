@@ -194,15 +194,89 @@ void idle_step(Snapshot& s) {
     }
 }
 
-void role_step(Snapshot& s) {
-    s.step = "role";
-    support_heal(s);          // v11: free cast for the Support role
-    maybe_lock_altar(s);      // v11: free consumable action
-    if (disrupt::step(s)) { s.step = "disrupt"; return; }
-    if (contest_capture(s)) { s.step = "contest"; return; }
-    if (farm::farm_step(s)) { s.step = "farm"; return; }
+// ---- Step c, Level 1: one mode per turn (Phase 1 design doc, "Level 1: choosing the mode") --------
+
+enum class Mode : std::uint8_t { None, Carry, Retreat, Fight, Support, Explore, Farm };
+
+const char* mode_name(Mode m) {
+    switch (m) {
+        case Mode::Carry: return "CARRY";
+        case Mode::Retreat: return "RETREAT";
+        case Mode::Fight: return "FIGHT";
+        case Mode::Support: return "SUPPORT";
+        case Mode::Explore: return "EXPLORE";
+        case Mode::Farm: return "FARM";
+        default: return "";
+    }
+}
+
+struct ModeMemory { Mode mode = Mode::None; int since = -1000; };
+ModeMemory g_mode;
+
+void enter(Snapshot& s, Mode m) {
+    if (m != g_mode.mode) g_mode = ModeMemory{m, s.round};
+    s.mode = mode_name(m);
+}
+
+// Rule 5: Willow and an ally in range missing SUPPORT_HEAL_MISSING+ health; or (step b fields) the
+// scorer is in sight, carries SUPPORT_SCORER_BAG+ gems, and a danger record lies within
+// SUPPORT_DANGER_RANGE tiles of it.
+bool support_wanted(const Snapshot& s) {
+    if (s.role == Role::Support)
+        for (const AllyNow& a : s.allies) {
+            if (a.pos.chebyshev_distance(s.me) > SUPPORT_HEAL_RANGE) continue;
+            a.read_stats();
+            if (a.max_health - a.health >= SUPPORT_HEAL_MISSING) return true;
+        }
+    if (!USE_STEP_B_FIELDS) return false;
+    return false;   // scorer escort: reads the step b scorer field (switched off until step b passes)
+}
+
+// Rule 6: I am the scout and a stale camp target exists (step b field: off until step b passes).
+bool scout_wanted(const Snapshot& s) {
+    (void)s;
+    return USE_STEP_B_FIELDS && false;
+}
+
+// FARM (rule 7): the capture I stand on, then v13's role work (disruptors, contest, squad / split /
+// side-job target). True if it acted.
+bool run_farm(Snapshot& s) {
+    if (farm::finish_capture(s)) { s.step = "capture"; return true; }
+    if (disrupt::step(s)) { s.step = "disrupt"; return true; }
+    if (contest_capture(s)) { s.step = "contest"; return true; }
+    if (farm::farm_step(s)) { s.step = "farm"; return true; }
+    return false;
+}
+
+void run_support(Snapshot& s) {
+    s.step = "support";
+    actions::heal_best(s);   // the escort candidate (walk to the scorer) arrives with step b
+}
+
+void run_explore(Snapshot& s) {
     s.step = "idle";
-    idle_step(s);
+    idle_step(s);            // Level 1: v13's idle step; Level 2 adds the stale-group / danger candidates
+}
+
+// Rules 5-8 with hysteresis: FARM, EXPLORE and SUPPORT are kept for MODE_HOLD_TURNS turns once chosen
+// (rules 1-4 have already had their chance to interrupt before this runs).
+void modes_5_to_8(Snapshot& s) {
+    support_heal(s);          // v11: free cast for the Support role (outside the modes)
+    maybe_lock_altar(s);      // v11: free consumable action (outside the modes)
+    const bool holding = (g_mode.mode == Mode::Farm || g_mode.mode == Mode::Explore || g_mode.mode == Mode::Support) &&
+                         s.round - g_mode.since < MODE_HOLD_TURNS;
+    if (holding) {
+        enter(s, g_mode.mode);
+        if (g_mode.mode == Mode::Support) run_support(s);
+        else if (g_mode.mode == Mode::Explore) run_explore(s);
+        else if (!run_farm(s)) run_explore(s);   // a held FARM with nothing to farm this turn waits
+        return;
+    }
+    if (support_wanted(s)) { enter(s, Mode::Support); run_support(s); return; }
+    if (scout_wanted(s)) { enter(s, Mode::Explore); run_explore(s); return; }
+    if (run_farm(s)) { enter(s, Mode::Farm); return; }
+    enter(s, Mode::Explore);
+    run_explore(s);
 }
 
 // ---- Steps 11-12 --------------------------------------------------------------------------------
@@ -240,35 +314,39 @@ void log_turn(const Snapshot& s) {
     if (!LOG_TURNS) return;
     const int g = farm::current_group();
     const int state = g == NO_GROUP ? -1 : static_cast<int>(mapinfo::groups()[static_cast<std::size_t>(g)].state);
-    std::cout << "M " << s.round << " " << bc::to_string(s.my_type) << " " << s.step << "/" << s.detail << " hit " << s.hit << " target " << g << " state "
+    std::cout << "M " << s.round << " " << bc::to_string(s.my_type) << " " << s.mode << ":" << s.step << "/" << s.detail << " hit " << s.hit << " target " << g << " state "
               << state << " bag " << s.bag << " hp " << static_cast<int>(s.health) << " at " << s.me.x << "," << s.me.y
               << " banked " << s.banked_us << " fuel_left " << bc::fuel_remaining() << "\n";
 }
 
-// Steps 4-10. Returns after the first step that used the turn.
+// Level 1 rules 1-8 in the doc's order; the first that applies is this turn's mode. Every rule reuses
+// the v13 decision at the same place in the old ladder, so Level 1 alone plays like v13 plus the
+// hysteresis. The stand-off (watchdog) and the shop trip stay outside the modes, where they were.
 void ladder(Snapshot& s) {
     g_stage = "endgame";
     const bool unstuck = s.round >= g_stuck_until;
-    if (unstuck && bank::endgame_or_win(s) && bank::go_tribute(s)) { s.step = "endgame-bank"; return; }   // 4 (v10: only if it acted)
+    if (unstuck && bank::endgame_or_win(s) && bank::go_tribute(s)) { s.step = "endgame-bank"; enter(s, Mode::Carry); return; }   // 1 CARRY
     g_stage = "retreat";
-    if (must_retreat(s)) { s.step = "retreat"; retreat_or_recall(s); return; }                // 5                // 5
+    if (must_retreat(s)) { s.step = "retreat"; enter(s, Mode::Retreat); retreat_or_recall(s); return; }                    // 2 RETREAT
     g_stage = "enemies";
-    if (s.round < g_go_home_until && !s.on_our_spawn) {                                      // 6a stand-off
+    if (s.round < g_go_home_until && !s.on_our_spawn) {                                      // watchdog stand-off (outside modes)
         s.step = "standoff";
         if (bank::recall_is_safe(s)) { bc::self().recall(); return; }
         hit_what_is_in_range(s);
         move::travel_toward(s, 3001, bc::map::spawn_region(bc::team::ally));
         return;
     }
-    if (combat::handle_enemies(s)) { s.step = "enemies"; return; }                            // 6
+    if (combat::handle_enemies(s)) {                                                          // 2 RETREAT (walk away) / 3 FIGHT
+        s.step = "enemies";
+        enter(s, std::string_view(s.detail) == "walk-away" ? Mode::Retreat : Mode::Fight);
+        return;
+    }
     g_stage = "bank";
-    if (unstuck && bank::handle(s)) { s.step = "bank"; return; }                                         // 7
+    if (unstuck && bank::handle(s)) { s.step = "bank"; enter(s, Mode::Carry); return; }      // 4 CARRY
     g_stage = "shop-trip";
-    if (shop::maybe_trip(s)) { s.step = "shop-trip"; return; }                               // 8
-    g_stage = "capture";
-    if (farm::finish_capture(s)) { s.step = "capture"; return; }                              // 9
+    if (shop::maybe_trip(s)) { s.step = "shop-trip"; return; }                               // shop trip (outside modes)
     g_stage = "role";
-    role_step(s);                                                                             // 10
+    modes_5_to_8(s);                                                                          // 5 SUPPORT, 6/8 EXPLORE, 7 FARM
 }
 
 // v10 watchdog: a champion that stays on one tile without hitting anything for STUCK_ROUNDS, outside the
