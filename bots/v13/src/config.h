@@ -173,7 +173,12 @@ constexpr int SUPPORT_SCORER_BAG = 40;      // SUPPORT (escort, step b): the sco
 constexpr int SUPPORT_DANGER_RANGE = 10;    // ...and a danger record lies this close to it
 
 // ---- Level 2: Q(a) (design step d) ----------------------------------------------------------------
-constexpr bool LEVEL2_ON = false;              // false = Level 1 only (v13's choice inside each mode). Off: not yet better than step c
+// LEVEL2 is a preprocessor switch: 0 compiles step c's code exactly (no Level 2 code runs or costs fuel;
+// any code change shifts fuel and so suspension points, which flipped 17 of 140 results on Oct 30).
+#ifndef LEVEL2
+#define LEVEL2 0                               // 0 = Level 1 only (v13's choice inside each mode). Off: not yet better than step c
+#endif
+constexpr bool LEVEL2_ON = LEVEL2;
 // Per-mode Level 2 switches (each off = v13's choice in that mode). FARM_SQUAD, CARRY and FIGHT lost on the
 // 20-map bisect (Oct 30: -150, -245, -85 gems vs Level 1 +123) with the starting weights: off until lambda tuning.
 constexpr bool LEVEL2_FARM_SQUAD = false;      // the squad chooser's group among the top 3

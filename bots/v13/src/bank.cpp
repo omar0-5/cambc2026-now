@@ -204,6 +204,7 @@ bool stun_threat(const Snapshot& s) {
 
 }  // namespace
 
+#if LEVEL2
 namespace {
 
 // Step d (CARRY): the nearest safe altar (v13's field), the next safe altars (1.2 x straight line: no
@@ -255,6 +256,7 @@ bool carry_level2(Snapshot& s) {
 }
 
 }  // namespace
+#endif
 
 bool go_tribute(Snapshot& s) {
     if (s.bag <= 0 || reach_steps(s) >= FAR_AWAY) return false;   // nothing to do: let the ladder go on
@@ -273,7 +275,9 @@ bool go_tribute(Snapshot& s) {
         waited = 0;
         if (tribute_here(s, altar)) return true;
     }
-    if (LEVEL2_CARRY && level2::active()) return carry_level2(s);
+#if LEVEL2
+    if constexpr (LEVEL2_CARRY) if (level2::active()) return carry_level2(s);
+#endif
     if (recall_is_faster(s) && recall_is_safe(s)) {
         bc::self().recall();
         return true;

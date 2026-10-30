@@ -74,6 +74,7 @@ std::vector<vec2> threats_near(const Snapshot& s) {
     return out;
 }
 
+#if LEVEL2
 // Step d (RETREAT): recall now (if safe), step away, or walk home around the danger layer - scored by
 // Q = -P(death) L_D - T r (nothing is gained, so the safest quick option wins).
 bool retreat_level2(Snapshot& s) {
@@ -106,9 +107,12 @@ bool retreat_level2(Snapshot& s) {
     actions::attack_best(s, aim);
     return true;
 }
+#endif
 
 void retreat_or_recall(Snapshot& s) {
-    if (LEVEL2_RETREAT && level2::active() && retreat_level2(s)) return;
+#if LEVEL2
+    if constexpr (LEVEL2_RETREAT) if (level2::active() && retreat_level2(s)) return;
+#endif
     if (bank::recall_is_safe(s)) {
         bc::self().recall();
         return;
@@ -171,6 +175,7 @@ bool maybe_lock_altar(Snapshot& s) {
 // v11: an enemy is capturing a cleared region (world.cpp reads capture_state): standing on the region
 // resets their progress, and they are stationary for the timer - often a free catchable fight. Walk
 // over when the reward pays for the detour and we arrive inside their capture timer.
+#if LEVEL2
 const GroupInfo* contest_target(const Snapshot& s) {
     if (s.bag > CONTEST_MAX_BAG || s.health < CONTEST_MIN_HEALTH * s.max_health) return nullptr;
     const GroupInfo* best = nullptr;
@@ -190,6 +195,22 @@ const GroupInfo* contest_target(const Snapshot& s) {
 bool contest_capture(Snapshot& s) {
     const GroupInfo* best = contest_target(s);
     if (!best) return false;
+#else
+bool contest_capture(Snapshot& s) {
+    if (s.bag > CONTEST_MAX_BAG || s.health < CONTEST_MIN_HEALTH * s.max_health) return false;
+    const GroupInfo* best = nullptr;
+    long best_distance = 1L << 30;
+    for (const GroupInfo& g : mapinfo::groups()) {
+        if (g.enemy_capture_timer < 0) continue;
+        const double reward = g.gems + LAMBDA_GEMS_PER_GOLD * g.gold;
+        if (reward < CONTEST_MIN_REWARD) continue;
+        const long d = g.centre.chebyshev_distance(s.me);
+        if (d > g.enemy_capture_timer + 2 || d >= best_distance) continue;   // cannot arrive in time
+        best = &g;
+        best_distance = d;
+    }
+    if (!best) return false;
+#endif
     s.detail = "contest";
     actions::Aim aim;
     aim.hit_camps = false;
@@ -258,6 +279,7 @@ ModeMemory g_mode;
 void enter(Snapshot& s, Mode m) {
     if (m != g_mode.mode) g_mode = ModeMemory{m, s.round};
     s.mode = mode_name(m);
+    LEVEL2_LABEL(s.mode);
 }
 
 // Rule 5: Willow and an ally in range missing SUPPORT_HEAL_MISSING+ health; or (step b fields) the
@@ -282,7 +304,11 @@ bool scout_wanted(const Snapshot& s) {
 
 // FARM (rule 7): the capture I stand on, then v13's role work (disruptors, contest, squad / split /
 // side-job target). True if it acted.
+#if LEVEL2
 bool run_farm_v13(Snapshot& s) {
+#else
+bool run_farm(Snapshot& s) {
+#endif
     if (farm::finish_capture(s)) { s.step = "capture"; return true; }
     if (disrupt::step(s)) { s.step = "disrupt"; return true; }
     if (contest_capture(s)) { s.step = "contest"; return true; }
@@ -290,11 +316,13 @@ bool run_farm_v13(Snapshot& s) {
     return false;
 }
 
+#if LEVEL2
 // Step d (FARM): the candidates available this turn - finish the capture I stand on, contest an enemy
 // capture, work the squad's (or split / side-job) target - scored with Q and tried best first; one that
 // cannot act falls through to the next. Disruptors keep their own step first (not a FARM candidate).
 bool run_farm(Snapshot& s) {
-    if (!LEVEL2_FARM_TURN || !level2::active()) return run_farm_v13(s);
+    if constexpr (!LEVEL2_FARM_TURN) return run_farm_v13(s);
+    if (!level2::active()) return run_farm_v13(s);
     if (disrupt::step(s)) { s.step = "disrupt"; return true; }
     struct Cand { double q; int kind; };   // 0 capture here, 1 contest, 2 target
     std::array<Cand, 3> cands{};
@@ -327,12 +355,14 @@ bool run_farm(Snapshot& s) {
     }
     return false;
 }
+#endif
 
 void run_support(Snapshot& s) {
     s.step = "support";
     actions::heal_best(s);   // the escort candidate (walk to the scorer) arrives with step b
 }
 
+#if LEVEL2
 // Step d (EXPLORE): up to LEVEL2_CANDIDATES stale valuable groups, Q = 0.9 P(available) reward -
 // P(death) L_D - T r, with P(available) = 1 when the belief says alive or back by arrival, else 0.5.
 // The best runs if its Q is positive; otherwise v13's idle step. (A danger record as a scouting target
@@ -370,16 +400,21 @@ bool explore_level2(Snapshot& s) {
     s.step = "explore";
     return move::travel_toward(s, 4000 + best, move::square(mapinfo::groups()[static_cast<std::size_t>(best)].centre, 2));
 }
+#endif
 
 void run_explore(Snapshot& s) {
     s.step = "idle";
-    if (LEVEL2_EXPLORE && level2::active()) {
+#if LEVEL2
+    if (LEVEL2_EXPLORE && level2::active()) {   // constexpr switch: folded away when off
         if (s.bag >= IDLE_BANK_BAG && bank::reach_steps(s) <= IDLE_BANK_STEPS && bank::go_tribute(s)) return;
         const bool hurt = s.health < 0.5 * s.max_health || (s.health < IDLE_HEAL_HEALTH * s.max_health && mapinfo::steps_from_us(s.me) <= IDLE_HEAL_HOME_STEPS);
         if (hurt && bank::recall_is_safe(s)) { bc::self().recall(); return; }
         if (explore_level2(s)) return;
     }
     idle_step(s);
+#else
+    idle_step(s);            // Level 1: v13's idle step; Level 2 adds the stale-group / danger candidates
+#endif
 }
 
 // Rules 5-8 with hysteresis: FARM, EXPLORE and SUPPORT are kept for MODE_HOLD_TURNS turns once chosen
@@ -398,6 +433,7 @@ void modes_5_to_8(Snapshot& s) {
     }
     if (support_wanted(s)) { enter(s, Mode::Support); run_support(s); return; }
     if (scout_wanted(s)) { enter(s, Mode::Explore); run_explore(s); return; }
+    LEVEL2_LABEL("FARM");
     if (run_farm(s)) { enter(s, Mode::Farm); return; }
     enter(s, Mode::Explore);
     run_explore(s);
@@ -449,6 +485,7 @@ void log_turn(const Snapshot& s) {
 void ladder(Snapshot& s) {
     g_stage = "endgame";
     const bool unstuck = s.round >= g_stuck_until;
+    LEVEL2_LABEL("CARRY");
     if (unstuck && bank::endgame_or_win(s) && bank::go_tribute(s)) { s.step = "endgame-bank"; enter(s, Mode::Carry); return; }   // 1 CARRY
     g_stage = "retreat";
     if (must_retreat(s)) { s.step = "retreat"; enter(s, Mode::Retreat); retreat_or_recall(s); return; }                    // 2 RETREAT
@@ -460,12 +497,14 @@ void ladder(Snapshot& s) {
         move::travel_toward(s, 3001, bc::map::spawn_region(bc::team::ally));
         return;
     }
+    LEVEL2_LABEL("FIGHT");
     if (combat::handle_enemies(s)) {                                                          // 2 RETREAT (walk away) / 3 FIGHT
         s.step = "enemies";
         enter(s, std::string_view(s.detail) == "walk-away" ? Mode::Retreat : Mode::Fight);
         return;
     }
     g_stage = "bank";
+    LEVEL2_LABEL("CARRY");
     if (unstuck && bank::handle(s)) { s.step = "bank"; enter(s, Mode::Carry); return; }      // 4 CARRY
     g_stage = "shop-trip";
     if (shop::maybe_trip(s)) { s.step = "shop-trip"; return; }                               // shop trip (outside modes)

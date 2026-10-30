@@ -189,6 +189,7 @@ bool group_feasible(const GroupInfo& g, const SquadStats& squad) {
     return hitting * (g.max_attack_range + 1) <= RETREAT_HEALTH * squad.tank_max_health;
 }
 
+#if LEVEL2
 // V(g)'s two parts: the (weighted) reward and the rounds it takes. Step d reuses both in Q(a).
 double group_rounds(const GroupInfo& g, const SquadStats& squad, const Snapshot& s, double* reward_out) {
     double reward = g.gems + LAMBDA_GEMS_PER_GOLD * g.gold;
@@ -214,6 +215,25 @@ double group_value(const GroupInfo& g, const SquadStats& squad, const Snapshot& 
     const double rounds = group_rounds(g, squad, s, &reward);
     return reward / std::max(1.0, rounds);
 }
+#else
+double group_value(const GroupInfo& g, const SquadStats& squad, const Snapshot& s) {
+    double reward = g.gems + LAMBDA_GEMS_PER_GOLD * g.gold;
+    if (g.gems == 0) reward *= GOLD_ONLY_FACTOR;
+    // v12 middle control: while we are not behind on the scoreboard, middle-band groups are worth a
+    // little extra - they are the ground the altars sit on, and conceding them is how a lead around
+    // the middle becomes "the enemy owns the middle" (match 8d0f4189: two mid altars, we drifted home).
+    if (g.in_middle_band && s.banked_us >= s.banked_them - MIDDLE_BEHIND_GEMS) reward *= MIDDLE_CONTEST_BONUS;
+    const Cost c = cost_of(g, squad);
+    const double walk = 1.2 * static_cast<double>(g.centre.chebyshev_distance(s.me));
+    double wait = 0;
+    if (g.state == GroupState::Respawning) wait = std::max(0.0, g.respawn_ready_round - s.round - walk);
+    // Each tank health bar spent = one recall home and the walk back to this group.
+    const double jungle = squad.tank_has_jungle ? JUNGLE_FACTOR : 1.0;
+    const double bars = c.tank_damage * jungle / std::max(1.0, squad.tank_max_health * (1.0 - RETREAT_HEALTH));
+    const double healing = bars * (RECALL_TURNS + g.steps_from_us);
+    return reward / std::max(1.0, walk + wait + c.kill_time + capture_rounds(s) + healing);
+}
+#endif
 
 namespace {
 
@@ -264,6 +284,7 @@ const std::vector<std::pair<double, int>>& by_bound(const Snapshot& s) {
     return order;
 }
 
+#if LEVEL2
 // Up to LEVEL2_CANDIDATES groups by V(g), best first (step d scores them with Q). The scan stops
 // once a group's upper bound cannot beat the last kept one.
 struct TopGroups { int count = 0; std::array<std::pair<double, int>, LEVEL2_CANDIDATES> at{}; };
@@ -290,6 +311,7 @@ TopGroups best_groups(const Snapshot& s, const SquadStats& squad, const std::vec
     }
     return top;
 }
+#endif
 
 int best_group(const Snapshot& s, const SquadStats& squad, const std::vector<int>& claimed, bool preferred_only,
                bool clusters_only) {
@@ -347,8 +369,9 @@ int choose_target(const Snapshot& s, int squad) {
     }
     const SquadStats st = squad_stats(s, squad);
     const std::vector<int> claimed = claimed_by_others(squad);
+#if LEVEL2
     int best = NO_GROUP;
-    if (LEVEL2_FARM_SQUAD && level2::active()) {
+    if (LEVEL2_FARM_SQUAD && level2::active()) {   // constexpr switch: folded away when off
         // Step d (FARM): the chooser scores v13's top groups with Q for the whole squad - reward and time
         // are squad totals, the risk is the tank's (approximated from my own state), and the time costs
         // every squad body (C_time = T x r x bodies).
@@ -370,6 +393,10 @@ int choose_target(const Snapshot& s, int squad) {
         best = best_group(s, st, claimed, true, false);
         if (best == NO_GROUP) best = best_group(s, st, claimed, false, false);   // anything we can take
     }
+#else
+    int best = best_group(s, st, claimed, true, false);
+    if (best == NO_GROUP) best = best_group(s, st, claimed, false, false);   // anything we can take
+#endif
     const int join = comms::squad_target(0);
     if (squad != 0 && join != NO_GROUP && join != best && join_is_better(s, squad, join, best)) best = join;
     return best;
@@ -445,10 +472,12 @@ int split_target(const Snapshot& s, int squad_goal) {
 
 int current_group() { return g_current_group; }
 
+#if LEVEL2
 double plan_rounds(const Snapshot& s, int group) {
     if (group < 0 || group >= static_cast<int>(mapinfo::groups().size())) return 1.0;
     return group_rounds(mapinfo::groups()[static_cast<std::size_t>(group)], squad_stats(s, s.squad), s, nullptr);
 }
+#endif
 
 void avoid_group(int group, int until_round) {
     if (group < 0 || group >= static_cast<int>(avoid_until().size())) return;

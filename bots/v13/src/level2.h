@@ -10,7 +10,17 @@
 //   bag weighs walking 20 rounds to a 60-gem group with P(death) = 0.1, all of it from enemies (e = 1):
 //   L_D = 50 + 40 + 9 = 99; Q = 0.9 * 60 - 0.1 * 99 - 20 * 0.15 = 54 - 9.9 - 3 = 41.1.
 #pragma once
+#include "config.h"
 #include "types.h"
+
+// The mode whose candidates are being scored (for the LOG_PDEATH lines). A rule is labelled before it
+// runs, because the ladder enters a mode only after the rule acted. Compiles to nothing when LEVEL2 is 0.
+#if LEVEL2
+namespace level2 { inline const char* g_label = "-"; }
+#define LEVEL2_LABEL(x) (level2::g_label = (x))
+#else
+#define LEVEL2_LABEL(x) ((void)0)
+#endif
 
 namespace level2 {
 

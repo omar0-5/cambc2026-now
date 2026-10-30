@@ -276,8 +276,12 @@ int cornered_target_of(const Snapshot& s) {
 
 FightPlan decide_fight(const Snapshot& s) {
     FightPlan plan;
+#if LEVEL2
     const bool scored = LEVEL2_FIGHT && level2::active();   // step d: rank fightable enemies by Q instead of kill value
     double best_value = scored ? -1e18 : 0;
+#else
+    double best_value = 0;
+#endif
     int channeler = -1;
     for (std::size_t i = 0; i < s.enemies.size(); ++i) {
         const EnemyNow& e = s.enemies[i];
@@ -306,6 +310,7 @@ FightPlan decide_fight(const Snapshot& s) {
         if (!fight && r.catchable && r.us >= r.them && r.chance >= ALTAR_GUARD_PWIN &&
             mapinfo::steps_to_altar(e.pos) <= ALTAR_GUARD_RANGE)
             fight = true;
+#if LEVEL2
         double value = kill_value(e, r.ours) + (engaged ? 1000.0 : 0.0);   // answer attackers first
         if (scored) {
             // Q(fight) = 0.9 p_win (bag + 10) - (1 - p_win) L_D - T r, T = rounds to kill; a loss is all enemy risk.
@@ -316,6 +321,9 @@ FightPlan decide_fight(const Snapshot& s) {
             p.T = std::max(1.0, r.ours);
             value = level2::q(s, p);
         }
+#else
+        const double value = kill_value(e, r.ours) + (engaged ? 1000.0 : 0.0);   // answer attackers first
+#endif
         if (fight && value > best_value) {
             best_value = value;
             plan.choice = FightChoice::Fight;

@@ -63,6 +63,7 @@ def main():
     ap.add_argument("bot_b")
     ap.add_argument("--maps", default="all")
     ap.add_argument("--half", choices=["A", "B"], help="tuning split: maps sorted by name, A = 1st, 3rd, ...; B = 2nd, 4th, ...")
+    ap.add_argument("--keep", action="store_true", help="keep replays and statistics JSON (default: deleted after parsing)")
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--out")
     args = ap.parse_args()
@@ -94,6 +95,9 @@ def main():
         except (OSError, KeyError, ValueError) as e:
             r = {"result": "FAILED", "error": str(e)}
         results.append({"map": name, "a_side": side, **r})
+        if not args.keep:   # ~1 MB per match; 140-match benches filled the disk on Oct 30
+            for f in (pathlib.Path(f"{stem}.json"), pathlib.Path(f"{stem}.repl26a")):
+                f.unlink(missing_ok=True)
 
     fields = ["map", "a_side", "result", "gems_a", "gems_b", "reach_a", "reach_b", "deaths_a", "deaths_b",
               "errors_a", "errors_b", "fuel_out_a", "fuel_out_b"]

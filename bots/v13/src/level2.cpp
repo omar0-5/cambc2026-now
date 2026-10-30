@@ -1,5 +1,7 @@
 // level2.cpp - see level2.h.
 #include "level2.h"
+#include "config.h"
+#if LEVEL2   // off: no Level 2 code in the build (identical to step c)
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -70,7 +72,7 @@ double p_death(const Snapshot& s, double T, vec2 dest, double* enemy_share) {
     if (enemy_share) *enemy_share = p > 1e-9 ? std::clamp((1.0 - enemies) * P_DEATH_CALIBRATION / p, 0.0, 1.0) : 0.0;
     if (LOG_PDEATH)
         std::cout << "PD " << bc::to_string(s.my_type) << " r" << s.round << " T" << static_cast<int>(T + 0.5) << " p" << static_cast<int>(std::clamp(p, 0.0, 1.0) * 1000)
-                  << " m" << (s.mode && *s.mode ? s.mode : "-") << "\n";
+                  << " m" << g_label << "\n";
     return std::clamp(p, 0.0, 1.0);
 }
 
@@ -87,3 +89,4 @@ double q(const Snapshot& s, const Plan& p) {
 }
 
 }  // namespace level2
+#endif
