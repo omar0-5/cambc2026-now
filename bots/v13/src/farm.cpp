@@ -20,6 +20,7 @@
 #include "config.h"
 #include "mapinfo.h"
 #include "move.h"
+#include "periodic.h"
 #include "shop.h"
 #include "world.h"
 
@@ -337,14 +338,24 @@ bool i_choose_for_squad(const Snapshot& s) {
 // The squad's shared target. Re-chosen when missing or finished (respawning for long); the chooser
 // also re-checks every 10 rounds and switches only to a clearly better group (1.5x the value), so the
 // squad does not flip between two targets as it walks.
+int choose_or_keep(const Snapshot& s, int target, bool must, bool chooser);
+
 int squad_target(const Snapshot& s) {
-    int target = comms::squad_target(s.squad);
+    const int target = comms::squad_target(s.squad);
     const bool chooser = i_choose_for_squad(s);
     const bool must = target == NO_GROUP || target_finished(s, target);
-    static int last_rescore = -100;
-    const bool periodic = chooser && s.round - last_rescore >= RESCORE_ROUNDS && bc::fuel_remaining() > FUEL_FOR_RESCORE;
-    if (periodic) last_rescore = s.round;
+    // Step 0c: the periodic re-check (~20k-52k) runs only with its measured cost + margin left, and
+    // staggered by body slot (periodic.h). It ran turns dry on 01islands under the old flat 70k rule.
+    static PeriodicJob rescore{RESCORE_ROUNDS, RESCORE_COST_GUESS};
+    const bool periodic = chooser && rescore.due(s.round, s.my_slot);
     if (!must && !periodic) return target;
+    const std::uint64_t fuel_before = bc::fuel_remaining();
+    const int result = choose_or_keep(s, target, must, chooser);
+    if (periodic) rescore.ran(s.round, fuel_before - std::min(fuel_before, bc::fuel_remaining()));
+    return result;
+}
+
+int choose_or_keep(const Snapshot& s, int target, bool must, bool chooser) {
     // v13 task 3: with NO target at all, choosing one is the most important thing this turn - v12 waited
     // for 70k fuel, which a turn on rushbait-v2 never had left after sensing (the team idled all game and
     // never tributed). The scan below stops early when fuel runs low, keeping the best group found.

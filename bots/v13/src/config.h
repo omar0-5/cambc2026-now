@@ -165,16 +165,9 @@ constexpr std::uint64_t FUEL_FOR_ATTACK = 5000;          // step 0: enough to fi
 constexpr std::uint64_t FUEL_FOR_SIDE_JOB = 60000;       // step 0: side-job scan (~30k) + acting on it (~20k)
 constexpr std::uint64_t FUEL_FOR_GROUP_FIELD = 75000;    // step 0c: one field + export costs ~65k on 100x100 (big-world): leftover fuel only
 
-// ---- Belief map (design step a) --------------------------------------------------------------------
-constexpr int SAFE_RING_ROUNDS = 8;      // a tile seen within this many rounds is known safe
-constexpr int STALE_ROUNDS = 40;         // an Alive group unseen this long is stale (EXPLORE re-checks it)
-constexpr int MAX_ALTARS = 16;
-constexpr int MAX_THREATS = 8;           // threat records kept
-constexpr int THREAT_DROP_ROUNDS = 15;   // a threat record unseen this long is dropped
-constexpr int THREAT_MAX_RADIUS = 8;     // danger square: reach + age, at most this
-constexpr double THREAT_DECAY = 0.85;    // weight of a record in P(death): 0.85^age
-constexpr std::uint64_t FUEL_FOR_DANGER = 20000;   // redraw the danger board only with this much left
 constexpr std::uint64_t FUEL_FOR_RESCORE = 70000;  // skip re-choosing a target below this (it scores every group)
+constexpr std::uint64_t PERIODIC_FUEL_MARGIN = 15000;   // step 0c: a periodic job needs its measured cost + this left
+constexpr std::uint64_t RESCORE_COST_GUESS = 55000;     // step 0c: first estimate of the re-check (55k + 15k = the old 70k)
 constexpr std::uint64_t FUEL_FOR_PATH = 30000;     // skip optional path searches below this
 constexpr std::uint64_t FUEL_FOR_TURN = 60000;     // a normal turn needs about this much (big maps)
 constexpr std::uint64_t SETUP_FUEL_RESERVE = 12000;// stop a setup step with this much fuel left
