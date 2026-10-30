@@ -188,6 +188,13 @@ bool group_feasible(const GroupInfo& g, const SquadStats& squad) {
     return hitting * (g.max_attack_range + 1) <= RETREAT_HEALTH * squad.tank_max_health;
 }
 
+// Step 0c: rounds to walk to the group - the real walk once its field exists (tangle: group 28 was 9
+// tiles away in a straight line and ~60 steps by path), else the old 1.2 x straight-line estimate.
+double walk_rounds(const GroupInfo& g, const Snapshot& s) {
+    const int steps = mapinfo::steps_to_group(g.index, s.me);
+    return steps >= 0 ? static_cast<double>(steps) : 1.2 * static_cast<double>(g.centre.chebyshev_distance(s.me));
+}
+
 double group_value(const GroupInfo& g, const SquadStats& squad, const Snapshot& s) {
     double reward = g.gems + LAMBDA_GEMS_PER_GOLD * g.gold;
     if (g.gems == 0) reward *= GOLD_ONLY_FACTOR;
@@ -196,7 +203,7 @@ double group_value(const GroupInfo& g, const SquadStats& squad, const Snapshot& 
     // the middle becomes "the enemy owns the middle" (match 8d0f4189: two mid altars, we drifted home).
     if (g.in_middle_band && s.banked_us >= s.banked_them - MIDDLE_BEHIND_GEMS) reward *= MIDDLE_CONTEST_BONUS;
     const Cost c = cost_of(g, squad);
-    const double walk = 1.2 * static_cast<double>(g.centre.chebyshev_distance(s.me));
+    const double walk = walk_rounds(g, s);
     double wait = 0;
     if (g.state == GroupState::Respawning) wait = std::max(0.0, g.respawn_ready_round - s.round - walk);
     // Each tank health bar spent = one recall home and the walk back to this group.
@@ -226,7 +233,7 @@ bool zone_rule_allows(const GroupInfo& g, const Snapshot& s) {
     if (!g.in_enemy_zone) return true;
     if (g.centre.chebyshev_distance(s.me) > ZONE_ENTRY_RANGE) return false;
     if (s.health < ZONE_ENTRY_HEALTH * s.max_health || s.bag > ZONE_ENTRY_BAG) return false;
-    return bank::p_die(s, g.steps_to_altar + g.centre.chebyshev_distance(s.me)) <= ZONE_FARM_MAX_PDIE;
+    return bank::p_die(s, g.steps_to_altar + static_cast<int>(walk_rounds(g, s))) <= ZONE_FARM_MAX_PDIE;
 }
 
 // Upper bound of group_value (no wait, kill or healing time): lets the scans below skip the costly
@@ -235,8 +242,7 @@ bool zone_rule_allows(const GroupInfo& g, const Snapshot& s) {
 double value_upper_bound(const GroupInfo& g, const Snapshot& s) {
     double reward = g.gems + LAMBDA_GEMS_PER_GOLD * g.gold;
     if (g.gems == 0) reward *= GOLD_ONLY_FACTOR;
-    const double walk = 1.2 * static_cast<double>(g.centre.chebyshev_distance(s.me));
-    return reward / std::max(1.0, walk + CAPTURE_ROUNDS);
+    return reward / std::max(1.0, walk_rounds(g, s) + CAPTURE_ROUNDS);
 }
 
 // Group indices by upper bound, best first. Step 0: cached per round and tile - the sort cost ~17k on
@@ -314,7 +320,8 @@ int choose_target(const Snapshot& s, int squad) {
     int best = best_group(s, st, claimed, true, false);
     if (best == NO_GROUP) best = best_group(s, st, claimed, false, false);   // anything we can take
     const int join = comms::squad_target(0);
-    if (squad != 0 && join != NO_GROUP && join != best && join_is_better(s, squad, join, best)) best = join;
+    // Step 0c: the join test (~9k) is optional - skipped once the scan reached its fuel floor (01islands).
+    if (squad != 0 && join != NO_GROUP && join != best && bc::fuel_remaining() >= FUEL_SCAN_FLOOR && join_is_better(s, squad, join, best)) best = join;
     return best;
 }
 
@@ -666,7 +673,7 @@ int side_job(const Snapshot& s, int squad_goal) {
         if (bc::fuel_remaining() < FUEL_SCAN_FLOOR) break;   // step 0: every scan stops here, keeping the best so far
         const GroupInfo& g = mapinfo::groups()[static_cast<std::size_t>(index)];
         if (contains(claimed, g.index)) continue;
-        if (g.centre.chebyshev_distance(s.me) > SIDE_JOB_RANGE) continue;
+        if (walk_rounds(g, s) > SIDE_JOB_RANGE) continue;   // step 0c: by walk, not straight line
         if (g.state == GroupState::Respawning) continue;
         if (!group_feasible(g, solo) || !zone_rule_allows(g, s)) continue;
         const double v = group_value(g, solo, s);

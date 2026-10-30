@@ -142,7 +142,8 @@ bool contest_capture(Snapshot& s) {
         if (g.enemy_capture_timer < 0) continue;
         const double reward = g.gems + LAMBDA_GEMS_PER_GOLD * g.gold;
         if (reward < CONTEST_MIN_REWARD) continue;
-        const long d = g.centre.chebyshev_distance(s.me);
+        const int walk = mapinfo::steps_to_group(g.index, s.me);   // step 0c: real walk when known
+        const long d = walk >= 0 ? walk : g.centre.chebyshev_distance(s.me);
         if (d > g.enemy_capture_timer + 2 || d >= best_distance) continue;   // cannot arrive in time
         best = &g;
         best_distance = d;
@@ -332,6 +333,7 @@ void champion_turn() {
         const Snapshot s = dead_snapshot();
         shop::buy_all(s);
         write_flags(s, true);
+        mapinfo::build_group_field_step();   // step 0c: a dead turn has fuel to spare
         return;
     }
     if (channeling_or_stunned()) return;                             // 2
@@ -371,4 +373,5 @@ void champion_turn() {
             std::cout << "SHOPLEFT " << bc::to_string(me.champion_name()) << " r" << s.round << " gold " << me.gold_count() << "\n";
     });
     log_turn(s);
+    mapinfo::build_group_field_step();   // step 0c: leftover fuel only (it stops below FUEL_FOR_GROUP_FIELD)
 }

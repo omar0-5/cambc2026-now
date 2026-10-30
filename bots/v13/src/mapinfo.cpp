@@ -31,6 +31,8 @@ struct MapData {
     std::vector<std::uint8_t> wall_bits;        // walls | holes | altars, row-major bits
     bc::bitboard safe_altar_ring;               // altar ring of altars outside the enemy zone
     bool thresholds_set = false;
+    std::vector<std::vector<std::uint16_t>> group_field;   // step 0c: walking steps to stand next to each group (lazy)
+    std::vector<int> field_order;                           // groups nearest our spawn first
     int d15 = 0, d60 = 0, home_to_altar = FAR_AWAY;
     vec2 home_centre{}, enemy_centre{};
 };
@@ -371,6 +373,36 @@ int steps_from_enemy(vec2 p) { return distance_here(data().from_enemy, p); }
 int steps_to_altar(vec2 p) { return distance_here(data().to_altar, p); }
 int steps_to_altar_open(vec2 p) { return data().to_altar_open.empty() ? FAR_AWAY : read_distance(data().to_altar_open, p); }
 bool any_gate() { return data().any_gate; }
+
+// Step 0c: walking steps from p to a tile next to group g, -1 while its field is not built yet.
+int steps_to_group(int g, vec2 p) {
+    const MapData& d = data();
+    if (g < 0 || static_cast<std::size_t>(g) >= d.group_field.size() || d.group_field[static_cast<std::size_t>(g)].empty()) return -1;
+    return distance_here(d.group_field[static_cast<std::size_t>(g)], p);
+}
+
+// One group field per call (~1k-27k fuel), nearest groups first, only from fuel left over at the end of a
+// turn: after ~groups-many turns every travel estimate is a real walk. Returns false when all are built.
+bool build_group_field_step() {
+    MapData& d = data();
+    if (!d.built || d.groups.empty()) return false;
+    if (bc::fuel_remaining() < FUEL_FOR_GROUP_FIELD) return true;   // before any work, even the first-call sort
+    if (d.field_order.empty()) {
+        d.group_field.assign(d.groups.size(), {});
+        for (const GroupInfo& g : d.groups) d.field_order.push_back(g.index);
+        std::sort(d.field_order.begin(), d.field_order.end(), [&](int a, int b) {
+            return d.groups[static_cast<std::size_t>(a)].steps_from_us < d.groups[static_cast<std::size_t>(b)].steps_from_us; });
+    }
+    for (int g : d.field_order) {
+        if (!d.group_field[static_cast<std::size_t>(g)].empty()) continue;
+        bc::bitboard roots;
+        roots.clear();
+        for (vec2 t : d.groups[static_cast<std::size_t>(g)].tiles) roots.draw_chebyshev(t, 1.0f);
+        d.group_field[static_cast<std::size_t>(g)] = compute_field(d.terrain_blocked | d.camp_spawns, roots);
+        return true;
+    }
+    return false;
+}
 int d15() { return data().d15; }
 int d60() { return data().d60; }
 
