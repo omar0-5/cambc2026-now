@@ -10,6 +10,7 @@
 #include <span>
 #include <variant>
 #include "config.h"
+#include "belief.h"
 #include "mapinfo.h"
 
 namespace world {
@@ -268,9 +269,11 @@ Snapshot sense() {
     s.on_our_spawn = bc::map::spawn_region(bc::team::ally).is_set(s.me);
     s.banked_us = static_cast<int>(bc::global_submitted_gems(bc::team::ally));
     s.banked_them = static_cast<int>(bc::global_submitted_gems(bc::team::enemy));
-    d.visible_bits = bc::vision::visible_tiles().export_linear_buffer();
+    const bc::bitboard visible = bc::vision::visible_tiles();
+    d.visible_bits = visible.export_linear_buffer();
     read_units(s);
     update_groups(s);
+    belief::update(s, visible);   // design step a
     write_sighting(s);
     return s;
 }

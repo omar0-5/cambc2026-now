@@ -163,6 +163,16 @@ constexpr std::uint64_t FUEL_FOR_FIRST_TARGET = 40000;   // v13: choosing when w
 constexpr std::uint64_t FUEL_SCAN_FLOOR = 25000;         // v13: the group scan stops below this
 constexpr std::uint64_t FUEL_FOR_ATTACK = 5000;          // step 0: enough to finish one basic attack
 constexpr std::uint64_t FUEL_FOR_SIDE_JOB = 60000;       // step 0: side-job scan (~30k) + acting on it (~20k)
+
+// ---- Belief map (design step a) --------------------------------------------------------------------
+constexpr int SAFE_RING_ROUNDS = 8;      // a tile seen within this many rounds is known safe
+constexpr int STALE_ROUNDS = 40;         // an Alive group unseen this long is stale (EXPLORE re-checks it)
+constexpr int MAX_ALTARS = 16;
+constexpr int MAX_THREATS = 8;           // threat records kept
+constexpr int THREAT_DROP_ROUNDS = 15;   // a threat record unseen this long is dropped
+constexpr int THREAT_MAX_RADIUS = 8;     // danger square: reach + age, at most this
+constexpr double THREAT_DECAY = 0.85;    // weight of a record in P(death): 0.85^age
+constexpr std::uint64_t FUEL_FOR_DANGER = 20000;   // redraw the danger board only with this much left
 constexpr std::uint64_t FUEL_FOR_RESCORE = 70000;  // skip re-choosing a target below this (it scores every group)
 constexpr std::uint64_t FUEL_FOR_PATH = 30000;     // skip optional path searches below this
 constexpr std::uint64_t FUEL_FOR_TURN = 60000;     // a normal turn needs about this much (big maps)
