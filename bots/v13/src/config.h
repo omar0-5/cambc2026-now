@@ -120,6 +120,14 @@ constexpr double H0 = 0.002;             // background risk of dying per round a
 constexpr int BAG_HOR = 25;              // Heart of Ruin banks at this bag, 3-champion game
 constexpr int BAG_FAR = 30;              // far pair banks at this bag, 4-5 champions
 constexpr int BAG_CI = 30;               // Cassi and Issac bank at this bag
+// Step 0b, guarded altars (every altar walled in by monster spawns: boss-battle, guardians, the-pack).
+// Bags stay small there so one tribute fits in the window while the guard camps are dead: 60 gems =
+// 6 channel turns, well inside a wolf's 40-round respawn. The same team bag sends the squad to clear
+// the guard camps when no altar is usable.
+constexpr int GUARDED_BANK_BAG = 60;
+constexpr int GUARD_RANGE = 3;           // a camp this close to an altar guards it
+constexpr int LIVE_FIELD_ROUNDS = 5;     // recompute the guarded-altar field at most this often
+constexpr std::size_t FIGHT_NEAREST_CAMPS = 8;   // step 0b: fight_monsters looks at this many nearest live camps
 constexpr int FREE_BANK_STEPS = 3;       // bank any bag if the altar costs <= this many extra steps
 constexpr bool FREE_BANK_ENABLED = true; // experiment E3
 constexpr int HOR_ANY_BAG_ALTAR = 8;     // Heart of Ruin banks any bag when an altar is this close
@@ -162,7 +170,8 @@ constexpr std::uint64_t FUEL_FOR_WARD = 20000;     // skip the ward step below t
 constexpr std::uint64_t FUEL_FOR_FIRST_TARGET = 40000;   // v13: choosing when we have no target at all
 constexpr std::uint64_t FUEL_SCAN_FLOOR = 25000;         // v13: the group scan stops below this
 constexpr std::uint64_t FUEL_FOR_ATTACK = 5000;          // step 0: enough to finish one basic attack
-constexpr std::uint64_t FUEL_FOR_SIDE_JOB = 60000;       // step 0: side-job scan (~30k) + acting on it (~20k)
+constexpr std::uint64_t FUEL_FOR_SIDE_JOB = 60000;
+constexpr std::uint64_t FUEL_FOR_LIVE_FIELD = 50000;     // step 0b: recompute the guarded-altar field only with this much       // step 0: side-job scan (~30k) + acting on it (~20k)
 constexpr std::uint64_t FUEL_FOR_RESCORE = 70000;  // skip re-choosing a target below this (it scores every group)
 constexpr std::uint64_t FUEL_FOR_PATH = 30000;     // skip optional path searches below this
 constexpr std::uint64_t FUEL_FOR_TURN = 60000;     // a normal turn needs about this much (big maps)

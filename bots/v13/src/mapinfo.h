@@ -53,6 +53,11 @@ int steps_from_enemy(vec2 p);
 int steps_to_altar(vec2 p);              // to the nearest altar ring tile
 int steps_to_altar_open(vec2 p);         // same, walking over monster spawn tiles (FAR_AWAY unless a gate map)
 bool any_gate();                         // some altar touches a monster spawn tile
+// Step 0b, guarded maps (no altar ring tile reachable from our spawn without passing monster spawns).
+bool guarded();
+int steps_to_altar_live(vec2 p);         // past only camps believed alive (FAR_AWAY if none / not guarded)
+bool tribute_tile_free(vec2 p);          // p is an altar ring tile reachable in that field
+void refresh_live_field(const bc::bitboard& dead_spawns, int round);   // world.cpp, once per turn
 int d15();                               // enemy-zone threshold
 int d60();                               // home-region threshold
 bool in_enemy_zone(vec2 p);              // steps_from_enemy(p) <= d15

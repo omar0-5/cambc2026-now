@@ -264,6 +264,7 @@ int best_group(const Snapshot& s, const SquadStats& squad, const std::vector<int
         if (bc::fuel_remaining() < FUEL_SCAN_FLOOR) break;   // step 0: every scan stops here, keeping the best so far
         const GroupInfo& g = mapinfo::groups()[static_cast<std::size_t>(index)];
         if (contains(claimed, g.index)) continue;
+        if (g.guard && mapinfo::guarded()) continue;   // step 0b: guards are hit only to open the altar (guard_target)
         if (clusters_only && !g.clusters_only) continue;
         if (preferred_only && !preferred_area(g, s.role)) continue;
         if (!group_feasible(g, squad) || !zone_rule_allows(g, s)) continue;
@@ -327,12 +328,48 @@ bool i_choose_for_squad(const Snapshot& s) {
     return true;
 }
 
+// Step 0b: on a guarded map with no usable altar, the gems we carry need a way in. Walk the open field
+// (spawn tiles walkable) from here toward the altar; the first spawn tile not seen dead is the camp to
+// kill. Examples: boss-battle -> the monolith on (24, 20); the-pack -> the wolf on our side of the ring.
+// The group is taken even when group_feasible says no: tanks rotate as each one retreats.
+int guard_target(const Snapshot& s) {
+    if (!mapinfo::guarded() || bank::reach_steps(s) < FAR_AWAY || bank::team_bag(s) < GUARDED_BANK_BAG) return NO_GROUP;
+    const bc::bitboard& dead = world::dead_spawns();
+    vec2 cur = s.me;
+    int d = mapinfo::steps_to_altar_open(cur);
+    for (int i = 0; i < 400 && d < FAR_AWAY; ++i) {
+        const int g = mapinfo::group_at(cur);
+        if (g != NO_GROUP && !dead.is_set(cur)) {
+            avoid_group(g, -1);   // a walk-away mark must not leave the squad idle in front of its only way in
+            return g;
+        }
+        if (d == 0) break;
+        vec2 next = cur;
+        for (int dx = -1; dx <= 1; ++dx)
+            for (int dy = -1; dy <= 1; ++dy) {
+                const vec2 q{cur.x + dx, cur.y + dy};
+                const int v = mapinfo::steps_to_altar_open(q);
+                if (v < d) d = v, next = q;
+            }
+        if (next == cur) break;
+        cur = next;
+    }
+    return NO_GROUP;
+}
+
 // The squad's shared target. Re-chosen when missing or finished (respawning for long); the chooser
 // also re-checks every 10 rounds and switches only to a clearly better group (1.5x the value), so the
 // squad does not flip between two targets as it walks.
 int squad_target(const Snapshot& s) {
     int target = comms::squad_target(s.squad);
     const bool chooser = i_choose_for_squad(s);
+    if (chooser) {
+        const int guard = guard_target(s);
+        if (guard != NO_GROUP) {
+            if (guard != target) comms::set_squad_target(s.squad, guard);
+            return guard;
+        }
+    }
     const bool must = target == NO_GROUP || target_finished(s, target);
     static int last_rescore = -100;
     const bool periodic = chooser && s.round - last_rescore >= RESCORE_ROUNDS && bc::fuel_remaining() > FUEL_FOR_RESCORE;
@@ -494,6 +531,9 @@ bc::bitboard tank_tiles(const Snapshot& s, const std::vector<const CampNow*>& li
             for (int dy = -1; dy <= 1; ++dy) {
                 const vec2 q{c->pos.x + dx, c->pos.y + dy};
                 if ((!dx && !dy) || !bc::map::is_in_bounds(q) || (q != s.me && blocked.is_set(q))) continue;
+                // Step 0b: a guarded map's spawn tile out of sight may hold a camp (the-pack's ring is
+                // mostly unseen): stepping there fails and the tank never reached a wolf.
+                if (mapinfo::guarded() && q != s.me && mapinfo::all_camp_spawns().is_set(q) && !world::dead_spawns().is_set(q)) continue;
                 candidates.push_back({live_exposure(q, live), q});
             }
     bc::bitboard out;
@@ -635,6 +675,15 @@ bool work_on_group(Snapshot& s, int index) {
     if (live.empty() && g.state == GroupState::RewardAvailable) return capture_step(s, g);
     if (live.empty()) return approach_group(s, g);
     if (g.clusters_only) return fight_clusters(s, g, live);
+    // Step 0b: the-pack's 48-wolf ring made fight_monsters cost 40k+ and run turns dry; monsters reach at
+    // most 5 tiles, so only the nearest few matter for tank tiles and cover.
+    if (live.size() > FIGHT_NEAREST_CAMPS) {
+        std::vector<const CampNow*> near = live;
+        std::partial_sort(near.begin(), near.begin() + FIGHT_NEAREST_CAMPS, near.end(), [&](const CampNow* a, const CampNow* b) {
+            return a->pos.chebyshev_distance(s.me) < b->pos.chebyshev_distance(s.me); });
+        near.resize(FIGHT_NEAREST_CAMPS);
+        return fight_monsters(s, g, near);
+    }
     return fight_monsters(s, g, live);
 }
 
@@ -666,6 +715,7 @@ int side_job(const Snapshot& s, int squad_goal) {
         if (bc::fuel_remaining() < FUEL_SCAN_FLOOR) break;   // step 0: every scan stops here, keeping the best so far
         const GroupInfo& g = mapinfo::groups()[static_cast<std::size_t>(index)];
         if (contains(claimed, g.index)) continue;
+        if (g.guard && mapinfo::guarded()) continue;   // step 0b: hitting a guard keeps it awake over the altar
         if (g.centre.chebyshev_distance(s.me) > SIDE_JOB_RANGE) continue;
         if (g.state == GroupState::Respawning) continue;
         if (!group_feasible(g, solo) || !zone_rule_allows(g, s)) continue;

@@ -21,6 +21,7 @@ Snapshot sense();             // every turn, once
 const comms::Plan& plan();
 const std::array<EnemyMemory, 13>& enemy_memory();   // indexed by champion_type value
 bool tile_visible(vec2 p);    // in my vision this turn (plain-memory copy: cheap)
+const bc::bitboard& dead_spawns();   // step 0b, guarded maps: spawn tiles last seen without their camp
 
 // Teammates (from the plan; works without vision).
 int squad_of(bc::champion_type type);

@@ -26,6 +26,7 @@ struct WorldData {
     std::array<EnemyMemory, 13> enemies{};
     std::vector<std::uint8_t> visible_bits;
     int width = 0;
+    bc::bitboard dead_spawns, scratch, camps;   // step 0b: spawn tiles seen without their camp (guarded maps only)
 };
 
 WorldData& data() {
@@ -177,7 +178,16 @@ void update_groups(const Snapshot& s) {
         }
     }
     for (GroupInfo& g : groups) {
-        if (g.state == GroupState::Respawning && s.round >= g.respawn_ready_round) g.state = GroupState::Unknown;
+        if (g.state == GroupState::Respawning && s.round >= g.respawn_ready_round) {
+            g.state = GroupState::Unknown;
+            if (mapinfo::guarded()) {   // step 0b: its camps are back - they block the way to the altar again
+                WorldData& d = data();
+                d.scratch.fill();   // copy in place (operator= allocates)
+                d.scratch &= g.spawn;
+                d.scratch &= d.dead_spawns;
+                d.dead_spawns ^= d.scratch;
+            }
+        }
         if (g.enemy_capture_timer >= 0) --g.enemy_capture_timer;   // counts down with or without us watching
     }
 }
@@ -236,6 +246,7 @@ bool setup_step() {
 }
 
 bool is_setup() { return data().setup; }
+const bc::bitboard& dead_spawns() { return data().dead_spawns; }
 const comms::Plan& plan() { return data().plan; }
 const std::array<EnemyMemory, 13>& enemy_memory() { return data().enemies; }
 
@@ -268,9 +279,21 @@ Snapshot sense() {
     s.on_our_spawn = bc::map::spawn_region(bc::team::ally).is_set(s.me);
     s.banked_us = static_cast<int>(bc::global_submitted_gems(bc::team::ally));
     s.banked_them = static_cast<int>(bc::global_submitted_gems(bc::team::enemy));
-    d.visible_bits = bc::vision::visible_tiles().export_linear_buffer();
+    const bc::bitboard visible = bc::vision::visible_tiles();
+    d.visible_bits = visible.export_linear_buffer();
     read_units(s);
     update_groups(s);
+    if (mapinfo::guarded()) {
+        // Step 0b: spawn tiles in sight are dead (no camp) or alive (a camp): dead = (dead | seen) ^ (seen & camps).
+        d.scratch.fill();   // copy in place (operator= allocates)
+        d.scratch &= visible;
+        d.scratch &= mapinfo::all_camp_spawns();
+        d.dead_spawns |= d.scratch;
+        bc::vision::camp_tiles_into(d.camps);
+        d.scratch &= d.camps;
+        d.dead_spawns ^= d.scratch;
+        mapinfo::refresh_live_field(d.dead_spawns, s.round);
+    }
     write_sighting(s);
     return s;
 }

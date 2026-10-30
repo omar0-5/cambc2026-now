@@ -17,22 +17,56 @@
 
 namespace bank {
 
-// Steps to an altar we can tribute at now. Normally the static field; on a gate map (the only altar ring
-// tiles are monster spawn tiles) the open field counts once every gate group is dead.
-// v10 fix (boss-battle freeze, Oct 25): with no reachable altar this is FAR_AWAY and every banking rule
-// below says "keep", instead of the endgame rule firing forever on a 9,999-step trip.
-bool gates_open() {
-    if (!mapinfo::any_gate()) return false;
-    for (const GroupInfo& g : mapinfo::groups())
-        if (g.gate && !(g.state == GroupState::Respawning || g.state == GroupState::RewardAvailable)) return false;
+// Step 0b, guarded maps: a ring tile we can tribute on now - reachable past the camps believed alive
+// (the live field) and outside the reach of every awake camp in sight. Sleeping camps never attack.
+bool tribute_tile_ok(const Snapshot& s, vec2 t) {
+    if (!mapinfo::tribute_tile_free(t)) return false;
+    for (const CampNow& c : s.camps)
+        if (c.awake && c.strength > 0 && c.pos.chebyshev_distance(t) <= c.attack_range) return false;
     return true;
 }
 
+namespace {
+
+// The guard camps we rely on come back before the tribute ends: only Respawning guard groups of this
+// altar have a timer (a dead camp of a group still alive - the-pack's wolf ring - stays dead).
+bool guards_return_first(const Snapshot& s, vec2 altar, int finish_round) {
+    for (const GroupInfo& g : mapinfo::groups()) {
+        if (!g.guard || g.state != GroupState::Respawning || finish_round < g.respawn_ready_round) continue;
+        for (vec2 t : g.tiles)
+            if (t.chebyshev_distance(altar) <= GUARD_RANGE) return true;
+    }
+    return false;
+}
+
+// Steps to a usable altar on a guarded map, FAR_AWAY if none. Cached per round, tile and bag.
+int guarded_reach(const Snapshot& s) {
+    static int cached_round = -1, cached_bag = -1, cached = FAR_AWAY;
+    static vec2 cached_at{-1, -1};
+    if (cached_round == s.round && cached_at == s.me && cached_bag == s.bag) return cached;
+    cached_round = s.round, cached_at = s.me, cached_bag = s.bag;
+    cached = FAR_AWAY;
+    const int steps = mapinfo::steps_to_altar_live(s.me);
+    if (steps >= FAR_AWAY) return cached;
+    const int finish = s.round + steps + tribute_turns(s.bag);
+    for (vec2 a : mapinfo::altars()) {
+        if (guards_return_first(s, a, finish)) continue;
+        for (int dx = -1; dx <= 1; ++dx)
+            for (int dy = -1; dy <= 1; ++dy)
+                if ((dx || dy) && tribute_tile_ok(s, vec2{a.x + dx, a.y + dy})) return cached = steps;
+    }
+    return cached;
+}
+
+}  // namespace
+
+// Steps to an altar we can tribute at now: the static field, or on a guarded map the live one.
+// v10 fix (boss-battle freeze, Oct 25): with no reachable altar this is FAR_AWAY and every banking rule
+// below says "keep", instead of the endgame rule firing forever on a 9,999-step trip.
 int reach_steps(const Snapshot& s) {
     const int closed = mapinfo::steps_to_altar(s.me);
-    if (closed < FAR_AWAY) return closed;
-    if (gates_open()) return mapinfo::steps_to_altar_open(s.me);
-    return FAR_AWAY;
+    if (closed < FAR_AWAY || !mapinfo::guarded()) return closed;
+    return guarded_reach(s);
 }
 
 namespace {
@@ -84,6 +118,15 @@ bool enemy_locked(vec2 altar) {
 // Altar ring tiles we may walk to: the safe ring (outside the enemy zone) minus visibly enemy-locked
 // altars (Marcella breaks locks, so she keeps them).
 bc::bitboard altar_goals(const Snapshot& s) {
+    if (mapinfo::guarded() && mapinfo::steps_to_altar(s.me) >= FAR_AWAY) {   // step 0b: the usable tiles only
+        bc::bitboard ok;
+        ok.clear();
+        for (vec2 a : mapinfo::altars())
+            for (int dx = -1; dx <= 1; ++dx)
+                for (int dy = -1; dy <= 1; ++dy)
+                    if ((dx || dy) && tribute_tile_ok(s, vec2{a.x + dx, a.y + dy})) ok.set(vec2{a.x + dx, a.y + dy});
+        return ok;
+    }
     bc::bitboard goals = mapinfo::safe_altar_ring();
     if (s.my_type == bc::champion_type::marcella) return goals;
     for (vec2 a : mapinfo::altars())
@@ -136,6 +179,8 @@ BankChoice bank_choice(const Snapshot& s) {
     if (steps >= FAR_AWAY) return BankChoice::Keep;   // no altar we can reach: keep playing
     if (FREE_BANK_ENABLED && steps <= FREE_BANK_STEPS) return BankChoice::GoTribute;
     const double pd = p_die(s, bank_rounds(s));
+    // Step 0b: guarded altars open only in windows, so bank small bags whenever one is open.
+    if (mapinfo::guarded() && mapinfo::steps_to_altar(s.me) >= FAR_AWAY && s.bag >= GUARDED_BANK_BAG) return escalate(s, pd);
     // v11: Prism's carried gems are +1.5 Focus each (a 40-gem bag is +60 Focus on every spell), so a
     // healthy Prism holds a bigger bag before banking. Never in contact (bag_threshold halves that).
     const double bank_factor = s.my_type == bc::champion_type::prism && s.health > 0.6 * s.max_health ? PRISM_BANK_FACTOR : 1.0;
@@ -209,6 +254,7 @@ bool go_tribute(Snapshot& s) {
     static int last_wait_round = -10;
     for (vec2 altar : mapinfo::altars()) {
         if (altar.chebyshev_distance(s.me) > 1) continue;
+        if (mapinfo::guarded() && mapinfo::steps_to_altar(s.me) >= FAR_AWAY && !tribute_tile_ok(s, s.me)) continue;
         if (stun_threat(s) && !endgame_or_win(s) && waited < STUN_WAIT_TURNS) {
             waited = s.round - last_wait_round <= 3 ? waited + 1 : 1;
             last_wait_round = s.round;

@@ -28,6 +28,10 @@ struct MapData {
     std::vector<std::uint16_t> from_us, from_enemy, to_altar;
     std::vector<std::uint16_t> to_altar_open;   // like to_altar, but monster spawn tiles are walkable (gate camps dead)
     bool any_gate = false;
+    bool guarded = false;                       // step 0b: no altar ring tile is reachable from our spawn past living camps
+    std::vector<std::uint16_t> to_altar_live;   // step 0b: like to_altar_open, but camps not known dead block
+    bc::bitboard live_dead;                     // the dead-spawn set to_altar_live was computed with
+    int live_round = -1000;
     std::vector<std::uint8_t> wall_bits;        // walls | holes | altars, row-major bits
     bc::bitboard safe_altar_ring;               // altar ring of altars outside the enemy zone
     bool thresholds_set = false;
@@ -154,6 +158,9 @@ GroupInfo describe_group(const bc::map::camp_group& engine_group, int index) {
     for (vec2 t : g.tiles)
         for (vec2 a : data().altars)
             if (t.chebyshev_distance(a) <= 1) g.gate = true;
+    for (vec2 t : g.tiles)
+        for (vec2 a : data().altars)
+            if (t.chebyshev_distance(a) <= GUARD_RANGE) g.guard = true;
     return g;
 }
 
@@ -276,9 +283,14 @@ bool compute_fields_step(bool have_plan_thresholds, int plan_d15, int plan_d60) 
         if (bc::fuel_remaining() < FIELD_FUEL) return false;
         d.to_altar = compute_field(base | theirs, d.safe_altar_ring);
     }
-    // Gate maps only (an altar touches a monster spawn): a second field where spawn tiles are walkable.
-    // Example (boss-battle): the only altar (25, 20) is reachable only from the monolith tile (24, 20).
-    if (d.any_gate && d.to_altar_open.empty() && !d.altars.empty() && !bc::is_draft()) {   // champions only: the draft does not need it
+    int best = FAR_AWAY;
+    for (vec2 p : ours.positions()) best = std::min(best, read_distance(d.to_altar, p));
+    d.home_to_altar = best;
+    // Guarded maps (step 0b): every altar ring tile is a monster spawn or walled in by spawns. Examples:
+    // boss-battle's only ring tile is the monolith tile (24, 20); the-pack's altar sits inside a ring of
+    // 48 wolves. A second field where spawn tiles are walkable gives the way in.
+    d.guarded = !d.altars.empty() && (d.any_gate || d.home_to_altar >= FAR_AWAY);
+    if (d.guarded && d.to_altar_open.empty() && !bc::is_draft()) {   // champions only: the draft does not need it
         if (bc::fuel_remaining() < FIELD_FUEL) return false;
         const bc::bitboard open_walls = bc::map::walls() | bc::map::holes() | bc::map::altars() | theirs;
         bc::bitboard ring;
@@ -286,9 +298,6 @@ bool compute_fields_step(bool have_plan_thresholds, int plan_d15, int plan_d60) 
         for (vec2 a : d.altars) ring.draw_chebyshev(a, 1.0f);
         d.to_altar_open = compute_field(open_walls, ring);
     }
-    int best = FAR_AWAY;
-    for (vec2 p : ours.positions()) best = std::min(best, read_distance(d.to_altar, p));
-    d.home_to_altar = best;
     return true;
 }
 
@@ -371,6 +380,29 @@ int steps_from_enemy(vec2 p) { return distance_here(data().from_enemy, p); }
 int steps_to_altar(vec2 p) { return distance_here(data().to_altar, p); }
 int steps_to_altar_open(vec2 p) { return data().to_altar_open.empty() ? FAR_AWAY : read_distance(data().to_altar_open, p); }
 bool any_gate() { return data().any_gate; }
+bool guarded() { return data().guarded; }
+int steps_to_altar_live(vec2 p) { return data().to_altar_live.empty() ? FAR_AWAY : distance_here(data().to_altar_live, p); }
+bool tribute_tile_free(vec2 p) { return !data().to_altar_live.empty() && read_distance(data().to_altar_live, p) == 0; }
+
+// Step 0b: the walk to the altar ring past only the camps believed alive (spawn tiles not in `dead`).
+// One engine field (~1k-27k fuel): recomputed only when the dead set changed, at most every
+// LIVE_FIELD_ROUNDS rounds, and only with fuel to spare (the old field is used meanwhile).
+void refresh_live_field(const bc::bitboard& dead, int round) {
+    MapData& d = data();
+    if (!d.guarded || !d.built) return;
+    if (!d.to_altar_live.empty() && (round - d.live_round < LIVE_FIELD_ROUNDS || dead == d.live_dead)) return;
+    if (bc::fuel_remaining() < FUEL_FOR_LIVE_FIELD) return;
+    bc::bitboard alive = d.camp_spawns;   // spawns & ~dead without a temporary complement
+    bc::bitboard both = d.camp_spawns;
+    both &= dead;
+    alive ^= both;
+    bc::bitboard walls = d.terrain_blocked;
+    walls |= alive;
+    // Roots: the altar ring; compute_field drops the tiles of living camps (a dead monolith's tile stays).
+    d.to_altar_live = compute_field(walls, d.altar_ring);
+    d.live_dead = dead;
+    d.live_round = round;
+}
 int d15() { return data().d15; }
 int d60() { return data().d60; }
 

@@ -68,6 +68,7 @@ struct GroupInfo {                  // one entry per bc::map::camp_groups() inde
     bool in_enemy_zone = false, in_home = false, in_middle_band = false;
     bool clusters_only = false, has_monsters = false, has_monolith = false;
     bool gate = false;              // a spawn tile touches an altar: tributing there needs this group dead (boss-battle)
+    bool guard = false;             // step 0b: a spawn tile within GUARD_RANGE of an altar (the-pack's wolf ring)
     // Live memory (world.cpp keeps this up to date from what this champion sees)
     GroupState state = GroupState::Unknown;
     int respawn_ready_round = 0;    // when state == Respawning

@@ -18,10 +18,11 @@ int bank_rounds(const Snapshot& s);          // steps to the nearest altar + tri
 enum class BankChoice { Keep, GoTribute, RecallThenTribute };
 BankChoice bank_choice(const Snapshot& s);
 
+int team_bag(const Snapshot& s);             // my bag + the bags of allies in sight
 bool endgame_or_win(const Snapshot& s);      // this bag wins, or the game ends soon: bank now
 bool go_tribute(Snapshot& s);                // walk to the best altar and start the tribute; false = could not act
 int reach_steps(const Snapshot& s);          // steps to an altar we can use now (FAR_AWAY if none, gate maps included)
-bool gates_open();                           // every gate group (spawn touching an altar) is dead
+bool tribute_tile_ok(const Snapshot& s, vec2 t);   // step 0b: guarded-map ring tile reachable and out of awake camps' reach
 bool handle(Snapshot& s);                    // ladder step 7: act on bank_choice. True = turn used
 bool recall_is_safe(const Snapshot& s);      // no enemy can reach us during the recall, no monster on us
 
