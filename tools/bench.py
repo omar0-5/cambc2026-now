@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Play bot A against bot B on every map, both sides, and report per map from A's point of view.
 
-Usage: python3 tools/bench.py bots/v13 bots/v15 [--maps 00anvil,00eight] [--jobs 8] [--out replays/bench/NAME]
+Usage: python3 tools/bench.py bots/v13 bots/v15 [--maps 00anvil,00eight] [--half A|B] [--jobs 8] [--out replays/bench/NAME]
 
 Per map and side: result, gems tributed (A and B), round A reached 1000 gems, deaths, bot errors
 ("bot error" lines) and out-of-fuel turns ("fuel out" lines; only bots with that log line in main.cpp
@@ -62,11 +62,14 @@ def main():
     ap.add_argument("bot_a")
     ap.add_argument("bot_b")
     ap.add_argument("--maps", default="all")
+    ap.add_argument("--half", choices=["A", "B"], help="tuning split: maps sorted by name, A = 1st, 3rd, ...; B = 2nd, 4th, ...")
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--out")
     args = ap.parse_args()
     a, b = (ROOT / args.bot_a).resolve(), (ROOT / args.bot_b).resolve()
     maps = sorted((ROOT / "maps").glob("*.map26a")) if args.maps == "all" else [ROOT / "maps" / f"{m}.map26a" for m in args.maps.split(",")]
+    if args.half:
+        maps = maps[0 if args.half == "A" else 1::2]
     out = pathlib.Path(args.out).resolve() if args.out else ROOT / "replays" / "bench" / f"{a.name}-vs-{b.name}"   # run-batch needs absolute paths
     out.mkdir(parents=True, exist_ok=True)
     # run-batch refuses to overwrite, and stale files would be parsed as this run's results.

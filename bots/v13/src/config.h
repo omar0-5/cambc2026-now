@@ -196,6 +196,8 @@ constexpr double P_AVAILABLE_UNKNOWN = 0.5;    // EXPLORE: a stale group is back
 constexpr double RETREAT_STEP_ROUNDS = 2;     // RETREAT: a step away counts as this many rounds of exposure
 constexpr int CARRY_KEEP_ROUNDS = 10;          // CARRY: keep the chosen altar this long (no swapping between similar ones)
 constexpr double DANGER_UNKNOWN_PLOSE = 0.5;   // a team danger record of unknown type beats me this often
+constexpr double P_DEATH_CALIBRATION = 0.16;   // P(death) x this: 30 Oct calibration bench (LOG_PDEATH, tools/calibrate.py)
+                                                // found deaths at 0.16x the prediction in every 10% bucket
 
 // ---- Belief map (design step a) --------------------------------------------------------------------
 constexpr int SAFE_RING_ROUNDS = 8;      // a tile seen within this many rounds is known safe
@@ -217,4 +219,5 @@ constexpr std::uint64_t THRESHOLD_FUEL = 180000;      // map build: zone thresho
 constexpr std::uint64_t CLASSIFY_FUEL = 60000;        // map build: per-group distances need this much // draft: start the map build only with this much fuel        // one distance field + export on a 100x100 map ~50k
 
 // ---- Debug ---------------------------------------------------------------------------------
+constexpr bool LOG_PDEATH = false; // true: print every Level 2 P(death) prediction (tools/calibrate.py; keep false to submit)
 constexpr bool LOG_TURNS = false;  // true: print one line per turn (costs fuel; keep false to submit)

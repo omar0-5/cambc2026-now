@@ -66,8 +66,11 @@ double p_death(const Snapshot& s, double T, vec2 dest, double* enemy_share) {
         enemies *= 1.0 - belief::threat_weight(t, s.round) * p_contact(d, T) * lose * std::min(t.count, 3);
     }
     enemies = std::clamp(enemies, 0.0, 1.0);
-    const double p = 1.0 - background * enemies;
-    if (enemy_share) *enemy_share = p > 1e-9 ? std::clamp((1.0 - enemies) / p, 0.0, 1.0) : 0.0;
+    const double p = (1.0 - background * enemies) * P_DEATH_CALIBRATION;
+    if (enemy_share) *enemy_share = p > 1e-9 ? std::clamp((1.0 - enemies) * P_DEATH_CALIBRATION / p, 0.0, 1.0) : 0.0;
+    if (LOG_PDEATH)
+        std::cout << "PD " << bc::to_string(s.my_type) << " r" << s.round << " T" << static_cast<int>(T + 0.5) << " p" << static_cast<int>(std::clamp(p, 0.0, 1.0) * 1000)
+                  << " m" << (s.mode && *s.mode ? s.mode : "-") << "\n";
     return std::clamp(p, 0.0, 1.0);
 }
 
