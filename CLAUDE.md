@@ -23,7 +23,7 @@ Full rules: `docs/GameRules.md`. C++ API: `docs/BotAPICpp.md` (large: search it,
 
 | Submitted (UTC) | Version | Code | Elo / rank at submission | Elo / rank later | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 2026-10-31 ~10:35 | v22 | v21 + `HOR_SHIELD_EAGER` + `HOR_FOCUS_BUILD` (local: no gain, 143 vs 145 on v19) | 1,552 / #365 (10:37, v21 live) | | scrim-only test vs v21 |
+| 2026-10-31 ~10:35 | v22 | v21 + `HOR_SHIELD_EAGER` + `HOR_FOCUS_BUILD` (local: no gain, 143 vs 145 on v19) | 1,552 / #365 (10:37, v21 live) | | scrims slightly worse than v21 on every metric → roll back to v21 |
 | 2026-10-31 ~10:05 | v21 | v20 + `SHOP_TOP_BUILD` (top teams' Bruiser + Durability Health build); local vs ganker + v15-baseline, both halves: 158 vs 145 wins, deaths and death time down, damage ratio up, overruns 502 vs 556 | 1,555 / #360 (10:10, v20 live) | | live 10:14; scrims slightly better than v20 → new fallback; submit copy `replays/submit/v21` |
 | 2026-10-31 ~09:05 | v20 | v18 + side-job hysteresis (2b4ce69, tag `ladder-v19`) | 1,529 / #388 (Oct 31 morning, v18) | 1,571 / #346 (Oct 31, user) | live 09:12; fallback |
 | 2026-10-31 (earlier) | v18 | step c + fix A (7d64cac) | — | 1,529 / #388 | previous fallback |
@@ -39,6 +39,8 @@ Scrims play the live version only. Loop: local pass → user submits → scrims 
 | 10-31 09:1x | v20 | wide: 15 groups each vs #1–10 (1–69), #11–50 (0–80), #51–150 (0–75) | 1–224 | 204 | 15.3 | 0.9 | 2.36 | 21.9% |
 | 10-31 10:1x | v21 | exact A/B of v20 reference (`--source-group`) | 1–24 | 236 | 11.3 | 1.4 | 2.31 | 13.5% (v20 17.1%); damage ratio 0.30 (v20 0.31) |
 | 10-31 10:1x | v21 | exact A/B of v20 wide (#1–10 1–69, #11–50 0–80, #51–150 3–72) | 4–221 | 214 | 14.8 | 1.0 | 2.41 | 21.1% (v20 22.0%); damage ratio 0.29 (v20 0.29) |
+| 10-31 11:2x | v22 | exact A/B of v21 reference | 0–25 | 224 | 11.5 | 1.0 | 2.31 | 14.4% (v21 13.5%); damage ratio 0.27 (v21 0.30) |
+| 10-31 11:2x | v22 | exact A/B of v21 wide | 4–221 | 205 | 15.0 | 1.0 | 2.39 | 21.5% (v21 21.1%); damage ratio 0.28 (v21 0.29); HoR shield 4.30 casts / 100 rounds (v21 2.68), 154 per cast (unchanged: he buys ~160 gold of items) |
 
 ## Strategy document
 
@@ -84,6 +86,7 @@ Write replays and scratch output outside the repo (or in `replays/`, which is gi
 
 **After every change to this project, add an entry at the top of this list** (date, what changed, why, and how it was verified — e.g. build result and match scores). Keep each entry to a few lines.
 
+- **2026-10-31** — Profile of #1 Intercontinental Fish (`tools/team_profile.py`, 50 ranked matches, 38–12 vs median rank #4): draft Cassi & Issac + Heart of Ruin + Vendetta + Marcella / Vesper (+ Willow on 6-body maps); first tribute r124, 29.5 tributes of 38 gems, gems by r1000 828, 5.51 camps / 100 rounds, 11.1 kills vs 8.1 deaths, death time 8.3%. Gold / 100 rounds: Marcella 257, Vesper 258, Vendetta 185; Marcella and Vesper hold ~500 gold by round 250 and ~1,070 by round 500. Items: Bruiser stacking on the carries — Marcella Bruiser Focus 29.7 + Bruiser Health 21.7 shards a game, Vendetta Bruiser Strength 25.5; Heart of Ruin Bruiser Health + Capture + Monster/Jungle Focus; Cassi Bruiser Health + Power/Durability Focus; Issac and Willow Prospector Health. Willow heals 12.7k / game.
 - **2026-10-31** — Gold farm test on v21 (vs passive, 140 matches; gold per champion per 100 rounds / team gold by r1000 / Marcella tributed / Vesper gold): v21 91 / 3,321 / 239 / 1,246; G1 `MARCELLA_CAPTURES` 99 / 3,637 / 513 / 1,278 (camps 4.89 vs 5.04); G2 `EARLY_GOLD_ROUNDS` 400 97 / 3,602 / 216 / 1,558 (camps 5.20, first tribute r212 vs r191); G3 `EARLY_SHOP_ROUNDS` 400 90 / 3,309 — no effect. G1, G2, G1+G2 to the local bench. Unopposed gold (91) vs ladder (40): most of the gold gap is lost to opponents.
 - **2026-10-31** — Test 2 `HEALTH_DISCIPLINE` on v21 (local, ganker + v15-baseline, both halves): 143 wins vs v21's 158 (half B vs v15-baseline 32 vs 47) — fails, though deaths (−0.6 to −1.2) and death time (−1 to −2 points) fell. Marcella tributes 52 gems / game vs the top teams' 346 (2 gold per gem passive: 104 vs 692 gold): captures go to the lowest body slot (enum order: Ryth, Vesper, Vendetta before Marcella). Gold-test switches added (all off = v19/v21 defaults): `MARCELLA_CAPTURES` (G1), `EARLY_GOLD_ROUNDS` / `EARLY_GOLD_LAMBDA` (G2), `EARLY_SHOP_ROUNDS` / `EARLY_SHOP_GOLD` / `EARLY_SHOP_STEPS` (G3).
 - **2026-10-31** — Fight analysis on v21's 250 scrims (`tools/fight_numbers.py`: engaged = dealt/took champion damage in the 10 rounds before a death). Not numbers: outnumbered fights are 38% of our deaths and 39% of the damage gap; we lose every situation, 1v1 damage ratio 0.17 (680 deaths, 65 kills), even 2v1 0.24 and 3v1 0.48. Cause = gold: per champion per game we earn 424 (40 / 100 rounds) vs 1,655 (165) and spend all of it (387 vs 1,517; 14.5 vs 59.6 shards); same champions deal 3–4× our champion damage and take a quarter of it. Ability casts per champion cannot be read from summaries (no cast events); the replay decoder is the engine wasm in the visualiser (`~/Library/Caches/cambc/assets/*/visualiser`, `Game_Visualiser_Timeline_*`), not wired up.
