@@ -130,6 +130,13 @@ std::vector<const CampNow*> live_camps_of_group_visible(const Snapshot& s, int g
     return out;
 }
 
+// A recall that has progressed (our own fake recalls, started every turn end, do not count as away).
+bool really_recalling(const bc::champion& c) {
+    if (!c.is_recalling()) return false;
+    if constexpr (FAKE_RECALL_SELF || FAKE_RECALL_GUARD) return c.remaining_channel_time() <= RECALL_TRUST_TICKS;
+    return true;
+}
+
 int g_wait_group = NO_GROUP;   // gap 1 (c): a respawning group we chose to wait at (not "finished" while it respawns)
 
 bool target_finished(const Snapshot& s, int g) {
@@ -710,7 +717,7 @@ bool capture_step(Snapshot& s, GroupInfo& g) {
     bool vesper_near = false;
     for (const AllyNow& a : s.allies)
         if (a.type == bc::champion_type::vesper_vale && a.pos.chebyshev_distance(g.centre) <= VESPER_CAPTURE_RANGE &&
-            a.handle.is_visible() && !a.handle.is_recalling() && !a.handle.is_submitting_gems())
+            a.handle.is_visible() && !really_recalling(a.handle) && !a.handle.is_submitting_gems())
             vesper_near = true;
     if (vesper_near && s.round - ys > 30) ys = s.round;   // a new yield episode
     const bool still_yielding = s.round - ys <= VESPER_YIELD_ROUNDS;
@@ -726,7 +733,7 @@ bool capture_step(Snapshot& s, GroupInfo& g) {
         bool marcella_near = false;
         for (const AllyNow& a : s.allies)
             if (a.type == bc::champion_type::marcella && a.pos.chebyshev_distance(g.centre) <= VESPER_CAPTURE_RANGE &&
-                a.handle.is_visible() && !a.handle.is_recalling() && !a.handle.is_submitting_gems())
+                a.handle.is_visible() && !really_recalling(a.handle) && !a.handle.is_submitting_gems())
                 marcella_near = true;
         if (marcella_near && s.round - ms > 30) ms = s.round;
         marcella_takes = g.gems > 0 && !(g.gold > VESPER_GOLD_RATIO * g.gems) &&

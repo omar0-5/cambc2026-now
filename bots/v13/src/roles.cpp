@@ -582,6 +582,11 @@ Snapshot dead_snapshot() {
 
 }  // namespace
 
+// Fake recall (Fish's trick, decoded replays Oct 31): start a recall as the last action of a turn, cancel it first next
+// turn. Free: one start + one cancel per turn, and a channel only blocks actions after it starts. Enemy bots that trust
+// "channeling" see us as stuck; a recall we keep is one tick ahead.
+bool g_fake_recall = false;
+
 void champion_turn() {
     auto& me = bc::self();
     g_stage = "setup";
@@ -604,6 +609,13 @@ void champion_turn() {
         shop::buy_all(s);
         write_flags(s, true);
         return;
+    }
+    if constexpr (FAKE_RECALL_SELF) {
+        // Our own end-of-turn recall (below) is cancelled first, so the turn is free to act (one cancel per turn).
+        if (g_fake_recall && me.is_recalling()) {
+            try { me.cancel_recall(); } catch (const std::exception&) {}
+        }
+        g_fake_recall = false;
     }
     if (channeling_or_stunned()) return;                             // 2
     g_stage = "sense";
@@ -643,6 +655,12 @@ void champion_turn() {
             me.champion_name() != bc::champion_type::tavi)
             std::cout << "SHOPLEFT " << bc::to_string(me.champion_name()) << " r" << s.round << " gold " << me.gold_count() << "\n";
     });
+    if constexpr (FAKE_RECALL_SELF) {
+        if (me.is_alive() && !me.is_recalling() && !me.is_submitting_gems() && !me.is_teleporting() && !s.on_our_spawn &&
+            !bc::map::spawn_region(bc::team::ally).is_set(me.position()) && bc::fuel_remaining() > 5000) {
+            try { me.recall(); g_fake_recall = true; } catch (const std::exception&) {}
+        }
+    }
 #if WALK_TARGETING
     mapinfo::walk_field_step();   // gap 1 (a): one field in leftover fuel
 #endif   // gap 1 (a): one field in leftover fuel
