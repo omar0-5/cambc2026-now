@@ -20,6 +20,9 @@ constexpr double MIDDLE_BAND_HIGH = 0.65;
 constexpr int ZONE_ENTRY_RANGE = 10;        // steps from the champion to its target
 constexpr double ZONE_ENTRY_HEALTH = 0.70;  // "high health" = health / max_health
 constexpr int ZONE_ENTRY_BAG = 70;          // largest bag (carried gems) allowed to enter
+// Gap 3c variant: scale v13's P_die (bank_choice, zone rule) toward calibrated values (Oct 30: actual deaths ~0.16x
+// predicted). 1.0 = v18.
+constexpr double P_DIE_SCALE = 1.0;
 constexpr double ZONE_FARM_MAX_PDIE = 0.50; // farm inside the zone if P_die over the trip is below this
 
 // ---- Group scoring [S4] --------------------------------------------------------------------

@@ -121,7 +121,9 @@ int bank_rounds(const Snapshot& s) { return reach_steps(s) + tribute_turns(s.bag
 
 double p_die(const Snapshot& s, int t_bank_rounds) {
     const double background = std::exp(-H0 * (s.max_health / std::max(1.0f, s.health)) * t_bank_rounds);
-    return 1.0 - background * enemy_factor(s, t_bank_rounds) * monster_factor(s);
+    const double pd = 1.0 - background * enemy_factor(s, t_bank_rounds) * monster_factor(s);
+    if constexpr (P_DIE_SCALE != 1.0) return P_DIE_SCALE * pd;   // gap 3c variant: calibrated P_die in v13's bank and zone rules
+    return pd;
 }
 
 bool recall_is_safe(const Snapshot& s) {

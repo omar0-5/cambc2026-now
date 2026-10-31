@@ -80,3 +80,4 @@ compile_commands.json
 bots/starter/
 .vscode/
 tools/__pycache__/
+bots/ganker/
