@@ -133,7 +133,7 @@ std::vector<const CampNow*> live_camps_of_group_visible(const Snapshot& s, int g
 // A recall that has progressed (our own fake recalls, started every turn end, do not count as away).
 bool really_recalling(const bc::champion& c) {
     if (!c.is_recalling()) return false;
-    if constexpr (FAKE_RECALL_SELF || FAKE_RECALL_GUARD) return c.remaining_channel_time() <= RECALL_TRUST_TICKS;
+    if constexpr (FAKE_RECALL_SELF) return c.remaining_channel_time() <= RECALL_TRUST_TICKS;   // only our own fakes need it
     return true;
 }
 
