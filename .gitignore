@@ -79,3 +79,4 @@ compile_commands.json
 .DS_Store
 bots/starter/
 .vscode/
+tools/__pycache__/

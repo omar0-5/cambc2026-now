@@ -218,6 +218,16 @@ bool next_item(bc::champion_type t, const bc::enum_map<bc::item_type>& c, const 
         const F fam = static_cast<F>(f);
         if (fam != F::power && fam != F::bruiser && fam != F::greed && has_passive(c, fam)) ++done;
     }
+    if constexpr (SHOP_TOP_BUILD) {   // the ladder top teams' build (gap analysis, Oct 31): fixed families and stats
+        static const std::pair<F, St> top[] = {{F::bruiser, St::health}, {F::durability, St::health}, {F::bruiser, St::strength},
+                                               {F::jungle, St::strength}, {F::prospector, St::strength}};
+        for (const auto& [fam, st] : top) {
+            if (c[bc::get_item_enum(fam, st, false)] > 0) continue;   // this emblem is done
+            item = bc::get_item_enum(fam, st, true);
+            count = static_cast<int>(item.combine_count());
+            return true;
+        }
+    }
     for (F fam : family_order(k)) {
         if (has_passive(c, fam)) continue;
         if (fam == F::collectors && done < 3) continue;

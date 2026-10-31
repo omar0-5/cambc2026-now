@@ -133,6 +133,9 @@ constexpr int WIN_GEMS = 1000;
 constexpr int LAST_ROUND = 2000;
 
 // ---- Shopping [S8] -------------------------------------------------------------------------
+// Gap analysis (Oct 31) variant: buy the ladder top teams' build (Bruiser + Durability of Health, then Bruiser / Jungle /
+// Prospector of Strength) instead of v13's Monster-first order. Off = v18.
+constexpr bool SHOP_TOP_BUILD = false;
 constexpr int SHOP_GOLD = 150;  // gold that triggers a shop trip (recall home to buy)...
 constexpr int SHOP_TRIP_STEPS = 25;   // ...when the walk back from spawn is at most this many steps
 constexpr int SHOP_RICH_GOLD = 450;   // ...or we are this rich (ambush: spawn is 70 steps from any camp)
