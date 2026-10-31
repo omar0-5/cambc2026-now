@@ -1,21 +1,40 @@
-# CAMBC 2026a — v15 bot
+# CAMBC 2026a — FoolMeOrMe.com bot (`bots/v13`)
 
-We are building a competition bot for **CAMBC 2026a** (Battlecode-style). Our bot is **`bots/v15`**, written in **C++** and compiled to WebAssembly. It is the only bot in this repo; do not recreate the Python bots or the other-language SDKs.
+We are building a competition bot for **CAMBC 2026a** (Battlecode-style). The live bot is **`bots/v13`** (C++, compiled to WebAssembly). `bots/v15` is the older line, kept for reference. Do not recreate the Python bots or the other-language SDKs.
 
 ## The game in one paragraph
 
-Each team drafts 3–5 champions. Champions kill monster camps, stand on the cleared camp for 5 rounds to capture its gems and gold, then tribute the gems at an altar. The first team to tribute 1,000 gems wins; otherwise, at round 2,000, the team with more tributed gems wins. Gold buys shards and emblems on your own spawn. Champions don't share vision; they coordinate only through 1,024 bytes of draft memory (written in the draft) and 8 bytes of shared memory. A C++ bot gets 100k fuel (compute) per turn, 2x on the first turn of play and 100x on the first draft turn.
+Each team drafts 3–5 champions (Cassi & Issac is one pick, two bodies). Champions kill monster camps, stand on the cleared camp for 5 rounds to capture its gems and gold, then tribute the gems at an altar. The first team to tribute 1,000 gems wins; otherwise, at round 2,000, the team with more tributed gems wins. Gold buys shards and emblems on your own spawn. Champions don't share vision; they coordinate only through 1,024 bytes of draft memory (written in the draft) and 8 bytes of shared memory. A C++ bot gets 100k fuel (compute) per turn, 2x on the first turn of play and 100x on the first draft turn.
 
 Full rules: `docs/GameRules.md`. C++ API: `docs/BotAPICpp.md` (large: search it, don't read it whole).
 
-## Goals (set 2026-10-31)
+## Goals and status
 
-- **Main goal: top 8 on the ladder by 8 Nov.** On 31 Oct we were #388 of 815, Elo 1,529 (#8 was ~2,318).
-- **4 Nov sprint is a bonus:** have the best passing build submitted before its cutoff. No freeze before 7 Nov.
-- **Measure gaps against the top teams, not our own versions:** ladder losses vs much higher-ranked teams and top-8 matches (`tools/gap_fetch.py`). Fix the biggest gap first.
-- **Pass rule for a change:** both map halves vs both baselines (`tools/tune.py`). Fight changes also need ladder or scrim evidence: the baselines are not aggressive. Scrims: `cambc match-groups create <team id>` (5 unranked matches, any rank, quota 50 groups).
-- After 8 Nov: resume Level 2 and prepare for the specific top-8 opponents for the finals.
-- Runs use 2 workers under `nice -n 19` (`bench.py` defaults to `--jobs 2`).
+- **Main goal: top 8 on the ladder by 8 Nov.** 31 Oct morning: #388 of 815, Elo 1,529; #8 was ~2,318. Status and every submission: "Ladder submissions" below.
+- **4 Nov sprint is a bonus:** have the best passing build submitted before its cutoff (cutoff date not in the CLI or docs — check the website). No freeze before 7 Nov.
+- **Measure against the top teams, not our own versions.** Fix the biggest gap first.
+- **Pass rule for a change:** local first (both map halves vs both baselines — now `ganker` + `v15-baseline` — no more than ~8 wins lost on any half/baseline), then submit and run an exact scrim A/B vs the live version; keep or roll back. Farm changes: farm test first. Fight changes need scrim evidence (local baselines are our own bot families).
+- **Workers:** 2 under `nice -n 19` normally; 8 only when the user says they are away / overnight.
+- After 8 Nov: resume Level 2 (`#define LEVEL2`) and prepare for the specific top-8 opponents for the finals.
+
+## What we know about the top teams (31 Oct)
+
+Sources: 250 scrims vs ranks #1–150, 50+ ranked games of #1 Intercontinental Fish, 272 decoded top-10 games. Details and numbers are in the change log.
+
+- **The gap is gold, not fight numbers.** Same champions, but they earn ~4x our gold per champion (Fish carries ~257 / 100 rounds vs our ~40) and buy ~4x the shards; we lose even 1v1 (damage ratio 0.17). Outnumbered fights are only 38% of our deaths.
+- **Fish's economy:** Marcella and Vesper are the carries (gold @r250 ~500, @r500 ~1,070); Marcella takes 44% of the team's gem pickups (her passive: 2 gold per gem tributed), first tribute r54, small bags (~33), shops every ~37 rounds from r65. Bruiser stacking: Marcella Bruiser Focus + Health, Vendetta Bruiser Strength. Supports (Cassi & Issac, Willow) take almost no gold.
+- **Fights:** Fish start half their fights, at 3.0 vs 1.8 numbers with the nearest ally 2 tiles away; they die in 18% of fights (we: 49%), kill in 33% (we: 4%). Entry health is the same as ours — spacing and numbers differ, not health.
+- **Deaths:** we die healthy (89% health 10 rounds before), alone (52%, nearest ally 6 tiles) and mostly without hitting back (56%).
+- **Fake recall is the top-10 meta:** 6 of the top 10 (Fish, Mite, Ad Astra, newer team, policy wonk, print dont int) start a recall at every turn end and cancel it next turn — they always look "channeling". Free under the rules (one start + one cancel per turn). Our chase / interrupt rules trusted it (fixed in v24 by `FAKE_RECALL_GUARD`); `FAKE_RECALL_SELF` does it ourselves.
+- **Heart of Ruin's shield** casts 5.07 / 100 rounds at 314 per cast for them vs our 2.47 at 150 — but eager casting + Focus build (v22) did not help (our HoR earns too little gold).
+
+## Next steps (31 Oct)
+
+1. v24 (v23 + fake-recall guard): submit → exact 50-group A/B vs v23.
+2. Local: test 3 (Marcella banks at 30 + shop after bank), then spacing + engagement (`SPACING_ENGAGE`).
+3. Scrim test of `FAKE_RECALL_SELF`.
+4. Full 10-team report from the decoded replays (`tools/behaviour.py`, `tools/focus.py`).
+5. Held: 00stampede gem camp (needs a pull-one-elk tactic), fix B idle area (branch `fixB-wip`), 01boss-battle guarded altar (branch `step0b-wip`).
 
 ## Ladder submissions
 
@@ -45,45 +64,82 @@ Scrims play the live version only. Loop: local pass → user submits → scrims 
 | 10-31 11:2x | v22 | exact A/B of v21 reference | 0–25 | 224 | 11.5 | 1.0 | 2.31 | 14.4% (v21 13.5%); damage ratio 0.27 (v21 0.30) |
 | 10-31 11:2x | v22 | exact A/B of v21 wide | 4–221 | 205 | 15.0 | 1.0 | 2.39 | 21.5% (v21 21.1%); damage ratio 0.28 (v21 0.29); HoR shield 4.30 casts / 100 rounds (v21 2.68), 154 per cast (unchanged: he buys ~160 gold of items) |
 
+## Scrim results per version
+
+Scrims play the live version only. Loop: local pass → user submits → scrims → keep or roll back. Quota: 50 groups (250 games) per hour from the first group queued (`cambc match-groups quota`). `tools/scrim_queue.py` queues bands, `tools/scrim_report.py` reports a batch, `tools/death_report.py` breaks down our deaths. `--source-group <id>` replays an earlier group's opponent bot versions (exact A/B; matches are deterministic).
+
+| Date (UTC) | Version | Batch | Record | Gems by r1000 | Deaths | Kills | Camps / 100 rounds | Death time |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 10-31 07:5x | v18 | reference: 5 teams #30–103, 25 maps | 2–23 | 305 | 10.2 | 1.3 | 2.14 | 11.9% |
+| 10-31 09:1x | v20 (= v19 code) | reference, same teams / maps / sides (opponents may have updated) | 1–24 | 211 | 12.9 | 0.9 | 2.07 | 17.1% |
+| 10-31 09:1x | v20 | wide: 15 groups each vs #1–10 (1–69), #11–50 (0–80), #51–150 (0–75) | 1–224 | 204 | 15.3 | 0.9 | 2.36 | 21.9% |
+| 10-31 10:1x | v21 | exact A/B of v20 reference (`--source-group`) | 1–24 | 236 | 11.3 | 1.4 | 2.31 | 13.5% (v20 17.1%); damage ratio 0.30 (v20 0.31) |
+| 10-31 10:1x | v21 | exact A/B of v20 wide (#1–10 1–69, #11–50 0–80, #51–150 3–72) | 4–221 | 214 | 14.8 | 1.0 | 2.41 | 21.1% (v20 22.0%); damage ratio 0.29 (v20 0.29) |
+| 10-31 12:2x | v23 | exact A/B of v21 reference | 3–22 | 274 | 9.7 | 1.4 | 2.55 | 12.7% (v21 13.5%); damage ratio 0.36 (v21 0.30) |
+| 10-31 12:3x | v23 | exact A/B of v21 wide | 8–217 | 211 | 15.2 | 1.2 | 2.45 | 21.2% (v21 21.1%); damage ratio 0.32 (v21 0.29) → kept, new fallback |
+| 10-31 11:2x | v22 | exact A/B of v21 reference | 0–25 | 224 | 11.5 | 1.0 | 2.31 | 14.4% (v21 13.5%); damage ratio 0.27 (v21 0.30) |
+| 10-31 11:2x | v22 | exact A/B of v21 wide | 4–221 | 205 | 15.0 | 1.0 | 2.39 | 21.5% (v21 21.1%); damage ratio 0.28 (v21 0.29); HoR shield 4.30 casts / 100 rounds (v21 2.68), 154 per cast (unchanged: he buys ~160 gold of items) |
+
 ## Strategy document
 
 Every formula the bot uses (draft, group value V(g), P_die, banking, kill race, shopping, comms byte layouts, all `config.h` constants) is written up here:
-https://claude.ai/artifact/Tiey7oXuPuQF8Y28kCD7QT ("v15 Bot — Strategy & Equations", a Claude Docs doc). When a change alters a formula or threshold, update the matching section of that doc too.
+https://claude.ai/artifact/Tiey7oXuPuQF8Y28kCD7QT ("v15 Bot — Strategy & Equations", a Claude Docs doc; written for v15, most of it applies to v13). When a change alters a formula or threshold, update the matching section of that doc too.
+Phase 1 design (modes, Q(a), shared memory, belief map): https://claude.ai/artifact/RV3juWzzFKb3Mzy8FA9Vyz.
 
 ## Layout
 
 | Path | What |
 | --- | --- |
-| `bots/v15/src/` | The bot. One module per job (below) |
-| `bots/v15/src/config.h` | Every tunable number, in one place |
+| `bots/v13/src/` | The live bot. One module per job (below) |
+| `bots/v13/src/config.h` | Every tunable number and every experiment switch, in one place (switches default to the live version) |
+| `bots/v13-baseline`, `bots/v15-baseline` | Frozen reference bots for local benches |
+| `bots/ganker` | Test opponent: v18 with all fight gates at 0 (gitignored; rebuild with `tools/make_variant.py`, recipe in its docstring) |
+| `bots/passive` | Test opponent for the farm test: drafts, never acts |
+| `bots/v15` | Older bot line (reference only) |
+| `tools/` | Benches, scrims, ladder analysis, replay decoder (below) |
 | `sdk/cpp/` | The C++ SDK headers (`cambc.h`) — do not edit; refreshed by `cambc init` |
-| `sdk/templates/cpp/` | Template for `cambc new` |
-| `cmake/CMakeLists.txt` | Build file used by `cambc build` |
 | `maps/` | The 70 competition maps (`*.map26a`) |
-| `cambc.toml` | `sdk_version = "4.0.0"`, `languages = ["cpp"]` |
-| `.venv/` | Holds the `cambc` CLI — keep it |
+| `replays/` | Gitignored: bench output, scrim plans/reports (`replays/gap/`), submit copies (`replays/submit/vNN`), decoded replays (`replays/decoded/`) |
+| `cambc.toml`, `cmake/`, `.venv/` | Project config, build file, the `cambc` CLI — keep `.venv/` |
 
-Modules in `bots/v15/src/`: `main` (entry, try/catch, always `end_turn`) · `draft` (fixed lineup per team size, writes plan) · `mapinfo` (distance fields, zones d15/d60, group facts) · `world` (per-turn Snapshot, enemy memory, roles) · `roles` (the 12-step turn ladder) · `farm` (target choice, standing, capture) · `bank` (P_die, when to tribute) · `combat` (kill race, fight/interrupt/walk away) · `actions` (spell and attack targets) · `move` (pathing) · `shop` (buy lists) · `comms` (memory layouts) · `disrupt` (Cassi & Issac only).
+Modules in `bots/v13/src/`: `main` (entry, try/catch, always `end_turn`) · `draft` · `mapinfo` (distance fields, zones, group facts, setup) · `world` (per-turn Snapshot, enemy memory, roles) · `roles` (the turn ladder, modes) · `farm` (target choice, side jobs, capture) · `bank` (P_die, when to tribute) · `combat` (kill race, fight / interrupt / walk away) · `actions` · `move` · `shop` · `comms` · `disrupt` · `belief` · `level2` (compiled out).
+
+## Tools
+
+| Tool | What it does |
+| --- | --- |
+| `tools/bench.py BOT OPP [--half A\|B] [--jobs 2]` | All maps (or a half), both sides; per-map CSV |
+| `tools/tune.py NAME --half A\|B [--src DIR] [--bases ganker,v15-baseline] KEY=VALUE ...` | Variant with `config.h` overrides, bench one half; wins, gems by r1000, deaths, kills, death time, damage ratio |
+| `tools/make_variant.py SRC OUT KEY=VALUE ...` | Copy a bot source with overrides (submit copies, test bots) |
+| `tools/farm_test.py BOT` | vs `bots/passive`: gems by r1000, first tribute, camps / 100 rounds, gold per champion |
+| `tools/turn_log.py run\|report` | LOG_TURNS games: time breakdown, camp outcomes, targets taken before arrival |
+| `tools/scrim_queue.py`, `tools/scrim_ab.py`, `tools/scrim_report.py [--wait]` | Queue scrims by rank band; exact A/B with `--source-group` (same opponent bots, maps, sides); batch report |
+| `tools/gap_fetch.py`, `tools/gap_report.py`, `tools/time_breakdown.py`, `tools/team_profile.py TEAM`, `tools/top10.py` | Ladder summaries: gaps vs the top, time use, one team's profile, top-10 study |
+| `tools/fight_numbers.py`, `tools/death_report.py` | Fights by numbers; how we die (from summaries) |
+| `tools/replay_setup.sh`, `tools/replay_decode.mjs`, `tools/replay_batch.py IDS` | Replay decoder: the visualiser's engine wasm in Node; every action + per-round champion state, ~5 s per game |
+| `tools/focus.py`, `tools/behaviour.py` | From decoded replays: fight entry/exit, Marcella's game, deaths; casts per champion |
 
 ## Commands
 
 ```sh
-.venv/bin/cambc build bots/v15                        # compile
-.venv/bin/cambc run bots/v15 bots/v15 --release --map 00anvil   # self-play on one map
-.venv/bin/cambc run bots/v15 <other-bot> --release --statistics out.json --json
-.venv/bin/cambc view                                  # open the latest replay
+.venv/bin/cambc build bots/v13
+.venv/bin/cambc run bots/v13 bots/v13-baseline --release --map 00anvil
+python3 tools/tune.py NAME --half A --src bots/v13/src --bases ganker,v15-baseline SHOP_TOP_BUILD=true
+python3 tools/make_variant.py bots/v13/src replays/submit/vNN KEY=VALUE ...   # submit copy, then: cambc submit replays/submit/vNN
+.venv/bin/cambc submissions list            # live version; rollback: cambc submissions activate N
+.venv/bin/cambc match-groups quota --json   # 50 groups / hour from the first one queued
 ```
 
-Write replays and scratch output outside the repo (or in `replays/`, which is gitignored). For an opponent, create one with `cambc new` and delete it after.
+Scrims always play the **live** version. API calls are rate-limited (HTTP 429): don't run replay downloads while queueing scrims.
 
-## Rules for working on v15
+## Rules for working on the bot
 
-- Change **one number in `config.h` at a time**, then re-run matches on several maps before keeping it.
-- A thrown `cambc::error` costs 10k+ fuel: check `can_*` before acting; exceptions are a safety net, not control flow.
+- Every experiment is a `config.h` switch whose default is the live version; check the off build is byte-identical (`cmp` the wasm) — a constexpr flag that does not fold, or extra code, shifts fuel and changes matches. Use `#define` switches for code that must vanish (`LEVEL2`, `WALK_TARGETING`).
+- A submit copy must be the exact source that was benched (`diff -r` / `cmp` the wasm).
+- A thrown `cambc::error` costs 10k+ fuel: check `can_*` / `is_visible()` before acting; exceptions are a safety net, not control flow.
 - Watch fuel: never loop over every tile in C++ (a 100x100 loop costs ~80k); use engine bitboards and distance fields.
-- A draft turn must pick before doing anything else; running out of fuel in the draft makes the rest of the picks random.
-- Known dead code: `MONOLITH_SAFE_DISTANCE`, `LOCK_CARRIER_RANGE`, `SUPPORT_FOLLOW_RANGE`, `ETA_UNSEEN` are defined but unused. The table in the `shop.cpp` header comment is stale; the code is the truth.
-- Only `DRAFT_SET = 0` ships (Marcella, Vesper Vale, Vendetta / + Ryth / + Heart of Ruin). Sets 1–2 are untested alternatives.
+- A draft turn must pick before doing anything else.
+- Matches are deterministic: never repeat a run; compare versions across maps.
 
 ## Change log
 
