@@ -171,6 +171,11 @@ bool travel_to_altar(Snapshot& s, const bc::bitboard& goals) {
     return step_downhill(s, [](vec2 p) { return mapinfo::steps_to_altar(p); }) || step_toward(s, goals);
 }
 
+bool step_toward_safe_altar(Snapshot& s) {
+    if (s.cast_exclusive || !bc::self().can_move()) return false;
+    return step_downhill(s, [](vec2 p) { return mapinfo::steps_to_altar(p); });
+}
+
 bc::bitboard square(vec2 p, int radius) {
     bc::bitboard b;
     b.clear();

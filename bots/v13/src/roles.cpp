@@ -223,11 +223,18 @@ bool contest_capture(Snapshot& s) {
 // a bush if possible. v12: middle altars count too - with the altars in the middle of the map, parking
 // the roaming pair next to them keeps vision, contests captures and covers our bankers; drifting home
 // instead is how the middle got conceded (match 8d0f4189).
-bc::bitboard idle_area(const Snapshot& s) {
+// Fix B: idle-area builds skipped for fuel since the last build. Not reset by busy turns, so alternating
+// idle/busy turns cannot starve the build.
+int g_idle_area_deferrals = 0;
+
+// `force`: build regardless of fuel (after IDLE_AREA_MAX_DEFERRALS skipped turns, at the start of a turn).
+bc::bitboard idle_area(const Snapshot& s, bool force = false) {
     static bool built = false;
     static bc::bitboard area;
     if (built) return area;
+    if (!force && bc::fuel_remaining() < IDLE_AREA_FUEL) { ++g_idle_area_deferrals; return bc::bitboard{}; }   // fix B
     built = true;
+    g_idle_area_deferrals = 0;
     area.clear();
     for (vec2 a : mapinfo::altars()) {
         if (!mapinfo::in_enemy_half(a) && !mapinfo::in_middle_band(a)) continue;
@@ -253,7 +260,8 @@ void idle_step(Snapshot& s) {
     if (hurt && bank::recall_is_safe(s)) { bc::self().recall(); return; }
     if (s.role == Role::Interceptor || s.role == Role::FarPair) {
         const bc::bitboard area = idle_area(s);
-        if (!area.is_empty() && !area.is_set(s.me)) move::travel_toward(s, 2000, area);
+        if (area.is_empty() && g_idle_area_deferrals > 0) move::step_toward_safe_altar(s);   // fix B: area deferred this turn
+        else if (!area.is_empty() && !area.is_set(s.me)) move::travel_toward(s, 2000, area);
     }
 }
 
@@ -586,6 +594,8 @@ void champion_turn() {
         s.gold = static_cast<int>(me.gold_count());
         if (needs_heal(s)) { s.step = "heal"; hit_what_is_in_range(s); write_flags(s, false); log_turn(s); return; }
     }
+    // Fix B: an idle area deferred this many turns is built first, before the side job and target re-choice can starve it.
+    if (g_idle_area_deferrals >= IDLE_AREA_MAX_DEFERRALS) idle_area(s, true);
     ladder(s);
     const bool channel_started = me.is_recalling() || me.is_submitting_gems();
     watchdog(s, channel_started);

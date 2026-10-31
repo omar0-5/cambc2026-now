@@ -222,6 +222,9 @@ constexpr std::uint64_t SETUP_FUEL_RESERVE = 12000;// stop a setup step with thi
 // (One group cost up to 27k against the old 12k guard: 140 of 247 overruns on the 5 worst maps.)
 constexpr std::uint64_t GROUP_SETUP_FIRST_GUARD = 30000;
 constexpr std::uint64_t GROUP_SETUP_MARGIN = 5000;
+// Fix B: build the idle area (one-time, unguarded before) only with this much fuel left: measured build cost + margin.
+constexpr std::uint64_t IDLE_AREA_FUEL = 40000;
+constexpr int IDLE_AREA_MAX_DEFERRALS = 3;   // after this many skipped turns in a row, build at the start of the next turn
 constexpr std::uint64_t FIELD_FUEL = 60000;
 constexpr std::uint64_t DRAFT_PLAN_RESERVE = 120000;  // draft: write the map plan only with this much left after building it
 constexpr std::uint64_t DRAFT_MAP_START_FUEL = 500000;

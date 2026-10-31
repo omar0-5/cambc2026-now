@@ -28,6 +28,9 @@ bool step_toward(Snapshot& s, const bc::bitboard& goals, const bc::bitboard* avo
 bool travel_toward(Snapshot& s, int key, const bc::bitboard& goals);
 // Long trip to the nearest altar ring, using mapinfo's precomputed altar distance map.
 bool travel_to_altar(Snapshot& s, const bc::bitboard& goals);
+// One cheap step downhill on mapinfo's cached altar field (no new distance field); used while the idle area is unbuilt.
+// shortcut: that field leads to the nearest safe altar, which can be a home-half one; cache a mid/enemy-half altar field in setup if that matters.
+bool step_toward_safe_altar(Snapshot& s);
 
 // Walking steps from us to the nearest goal tile, FAR_AWAY if none (one distance field).
 int path_steps(const Snapshot& s, const bc::bitboard& goals);
