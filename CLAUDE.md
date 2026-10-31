@@ -17,6 +17,15 @@ Full rules: `docs/GameRules.md`. C++ API: `docs/BotAPICpp.md` (large: search it,
 - After 8 Nov: resume Level 2 and prepare for the specific top-8 opponents for the finals.
 - Runs use 2 workers under `nice -n 19` (`bench.py` defaults to `--jobs 2`).
 
+## Scrim results per version
+
+Scrims play the live version only. Loop: local pass → user submits → scrims → keep or roll back. Quota: 50 groups (250 games) per hour from the first group queued (`cambc match-groups quota`). `tools/scrim_queue.py` queues bands, `tools/scrim_report.py` reports a batch, `tools/death_report.py` breaks down our deaths. `--source-group <id>` replays an earlier group's opponent bot versions (exact A/B; matches are deterministic).
+
+| Date (UTC) | Version | Batch | Record | Gems by r1000 | Deaths | Kills | Camps / 100 rounds | Death time |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 10-31 07:5x | v18 | reference: 5 teams #30–103, 25 maps | 2–23 | 305 | 10.2 | 1.3 | 2.14 | 11.9% |
+| 10-31 09:1x | v20 (= v19 code) | reference, same teams / maps / sides (opponents may have updated) | 1–24 | 211 | 12.9 | 0.9 | 2.07 | 17.1% |
+
 ## Strategy document
 
 Every formula the bot uses (draft, group value V(g), P_die, banking, kill race, shopping, comms byte layouts, all `config.h` constants) is written up here:

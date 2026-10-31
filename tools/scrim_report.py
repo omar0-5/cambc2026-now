@@ -9,6 +9,8 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from gap_report import team_stats  # noqa: E402
+from time_breakdown import breakdown  # noqa: E402
+import statistics  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 C = str(ROOT / ".venv/bin/cambc")
@@ -21,6 +23,7 @@ def main():
     ranks = json.load(open(ROOT / "replays/gap/ranks.json"))["ranks"]
     S.mkdir(parents=True, exist_ok=True)
     wins = total = 0
+    agg = []
     for team, _maps, gid in groups:
         g = json.loads(subprocess.run([C, "match-groups", "show", gid, "--json"], capture_output=True, text=True).stdout)
         for m in g["matches"]:
@@ -37,6 +40,9 @@ def main():
             if f.exists():
                 d = json.load(open(f))
                 a, b = team_stats(d, "team" + us["side"].upper()), team_stats(d, "team" + th["side"].upper())
+                per, _clears, _att, _n = breakdown(d, "team" + us["side"].upper())
+                a["dead_pct"] = statistics.mean(c["dead"] for _, c in per.values()) if per else 0.0
+                agg.append(a)
             total += 1
             wins += us["result"] == "win"
             line = f"{us['result']:4} {m['map']:22} vs #{ranks.get(th['teamId'], '?'):<4} {th['name'][:18]:18} side {us['side']}"
@@ -45,6 +51,10 @@ def main():
                          f"  camps {a['camps']:.0f}-{b['camps']:.0f}  deaths {a['deaths']:.0f}-{b['deaths']:.0f}  {m['matchId'][:8]}")
             print(line)
     print(f"scrims: {wins}-{total - wins} of {total} finished")
+    if agg:
+        m = lambda k: statistics.mean(x[k] for x in agg)
+        print(f"  gems by r1000 {m('gems_r1000'):.0f}, deaths {m('deaths'):.1f}, kills {m('kills'):.1f}, "
+              f"camps/100 rounds {statistics.mean(x['camps'] / x['rounds'] * 100 for x in agg):.2f}, death time {m('dead_pct'):.1f}%")
 
 
 if __name__ == "__main__":
