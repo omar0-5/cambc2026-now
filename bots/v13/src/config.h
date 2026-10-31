@@ -52,9 +52,9 @@ constexpr bool SIDE_JOBS = true;               // v9: take a solo group nearby i
 constexpr int SIDE_JOB_RANGE = 12;
 // Gap 1 (b): keep a side job until done unless the main target is workable within SIDE_JOB_MAIN_CLOSE tiles; take only
 // side jobs whose detour to the main target is <= SIDE_JOB_MAX_DETOUR tiles. false = v18.
-constexpr bool SIDE_JOB_HYSTERESIS = false;
+constexpr bool SIDE_JOB_HYSTERESIS = true;
 constexpr int SIDE_JOB_MAIN_CLOSE = 3;
-constexpr int SIDE_JOB_MAX_DETOUR = 2;
+constexpr int SIDE_JOB_MAX_DETOUR = 99;   // the 2-tile detour filter cost as much as the hysteresis saved (farm test 4.20 vs 5.04)
 // Gap 1 (c): wait at the nearest feasible group when it respawns within (walk + kill time) of the chosen one. false = v18.
 constexpr bool RESPAWN_WAIT_TARGET = false;
 // Gap 1 (a): target value uses walking steps (per-group fields built in leftover fuel at turn end) instead of
