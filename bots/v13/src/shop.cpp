@@ -293,6 +293,13 @@ void buy_all(const Snapshot& s) {
 }
 
 bool maybe_trip(Snapshot& s) {
+    // G3 (gold test): early, spend each shard's worth when spawn is close.
+    if constexpr (EARLY_SHOP_ROUNDS > 0)
+    if (s.round < EARLY_SHOP_ROUNDS && !s.on_our_spawn && s.gold >= EARLY_SHOP_GOLD && s.bag == 0 && mapinfo::steps_from_us(s.me) <= EARLY_SHOP_STEPS &&
+        bank::recall_is_safe(s)) {
+        bc::self().recall();
+        return true;
+    }
     if (s.on_our_spawn || s.gold < SHOP_GOLD || s.bag > 0) return false;
     if (!mapinfo::in_home(s.me)) return false;
     // A trip costs the recall plus the walk back out: on maps with a far spawn, only when rich.

@@ -18,7 +18,8 @@ from gap_report import team_stats  # noqa: E402
 import json  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-KEYS = ["gems_r1000", "t_first", "camps_per_100", "gold_lt1000", "collected", "tributes", "deaths", "fuel_out", "size"]
+KEYS = ["gems_r1000", "t_first", "camps_per_100", "gold_lt1000", "collected", "tributes", "deaths", "fuel_out", "size",
+        "gold_per_champ_100", "marcella_tributed", "vesper_gold"]
 
 
 def main():
@@ -50,7 +51,12 @@ def main():
     results, failed = [], []
     for name, side, stem in rows:
         try:
-            s = team_stats(json.load(open(f"{stem}.json")), "team" + side.upper())
+            d = json.load(open(f"{stem}.json"))
+            s = team_stats(d, "team" + side.upper())
+            ours = [c for c in d["champions"] if c["team"] == "team" + side.upper()]
+            s["gold_per_champ_100"] = sum(float(c["metrics"]["earnedGold"]) for c in ours) / max(1, len(ours)) / max(1, s["rounds"]) * 100
+            s["marcella_tributed"] = sum(float(c["metrics"]["submittedGems"]) for c in ours if c["name"] == "Marcella")
+            s["vesper_gold"] = sum(float(c["metrics"]["earnedGold"]) for c in ours if c["name"] == "Vesper Vale")
         except (OSError, KeyError, ValueError):
             failed.append(name + "-" + side)
             continue
@@ -66,6 +72,8 @@ def main():
     print(f"{args.name or bot.name}: {len(results)} matches vs passive ({len(failed)} failed {failed[:5]})")
     print(f"  gems tributed by r1000 {mean('gems_r1000'):.0f} (top 628) | first tribute r{mean('t_first'):.0f} (top ~230) | "
           f"camps/100 rounds {mean('camps_per_100'):.2f} (top 5.29) | gold by r1000 {mean('gold_lt1000'):.0f} (top ~4,900)")
+    print(f"  gold per champion per 100 rounds {mean('gold_per_champ_100'):.0f} (top teams on the ladder 165) | Marcella tributed "
+          f"{mean('marcella_tributed'):.0f} gems | Vesper earned {mean('vesper_gold'):.0f} gold")
     print(f"  collected {mean('collected'):.0f}, tributes {mean('tributes'):.1f}, deaths {mean('deaths'):.1f}, fuel out {mean('fuel_out'):.1f} | {out / 'results.csv'}")
 
 

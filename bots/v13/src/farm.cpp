@@ -234,6 +234,9 @@ double group_value(const GroupInfo& g, const SquadStats& squad, const Snapshot& 
 double group_value(const GroupInfo& g, const SquadStats& squad, const Snapshot& s) {
     double reward = g.gems + LAMBDA_GEMS_PER_GOLD * g.gold;
     if (g.gems == 0) reward *= GOLD_ONLY_FACTOR;
+    // G2 (gold test): early on, gold buys the items that win fights (we earned 40 gold / 100 rounds vs 165).
+    if constexpr (EARLY_GOLD_ROUNDS > 0)
+        if (s.round < EARLY_GOLD_ROUNDS) reward = g.gems + EARLY_GOLD_LAMBDA * g.gold;
     // v12 middle control: while we are not behind on the scoreboard, middle-band groups are worth a
     // little extra - they are the ground the altars sit on, and conceding them is how a lead around
     // the middle becomes "the enemy owns the middle" (match 8d0f4189: two mid altars, we drifted home).
@@ -279,6 +282,8 @@ bool zone_rule_allows(const GroupInfo& g, const Snapshot& s) {
 double value_upper_bound(const GroupInfo& g, const Snapshot& s) {
     double reward = g.gems + LAMBDA_GEMS_PER_GOLD * g.gold;
     if (g.gems == 0) reward *= GOLD_ONLY_FACTOR;
+    if constexpr (EARLY_GOLD_ROUNDS > 0)
+        if (s.round < EARLY_GOLD_ROUNDS) reward = g.gems + EARLY_GOLD_LAMBDA * g.gold;   // G2 (same as group_value)
     double walk = 1.2 * static_cast<double>(g.centre.chebyshev_distance(s.me));
     if constexpr (WALK_DISTANCE_TARGETING) {   // (a): stay a lower bound of walk_rounds (fields measure to the group's edge)
         long radius = 0;
@@ -710,7 +715,24 @@ bool capture_step(Snapshot& s, GroupInfo& g) {
     if (vesper_near && s.round - ys > 30) ys = s.round;   // a new yield episode
     const bool still_yielding = s.round - ys <= VESPER_YIELD_ROUNDS;
     const bool vesper_takes = g.gold > VESPER_GOLD_RATIO * g.gems && (me_vesper || (vesper_near && still_yielding));
-    if (vesper_takes && !me_vesper && !broke) {
+    // G1 (gold test, Oct 31): Marcella's passive pays 2 gold per gem she tributes, but the lowest body slot kept
+    // captures, so she tributed 52 gems a game vs the top teams' Marcella 346. Gem groups go to her when she is there.
+    bool marcella_takes = false;
+    const bool me_marcella = s.my_type == bc::champion_type::marcella;
+    if constexpr (MARCELLA_CAPTURES) {
+        static std::vector<int> m_yield_since;
+        if (m_yield_since.size() < mapinfo::groups().size()) m_yield_since.assign(mapinfo::groups().size(), -1000);
+        int& ms = m_yield_since[static_cast<std::size_t>(g.index)];
+        bool marcella_near = false;
+        for (const AllyNow& a : s.allies)
+            if (a.type == bc::champion_type::marcella && a.pos.chebyshev_distance(g.centre) <= VESPER_CAPTURE_RANGE &&
+                !a.handle.is_recalling() && !a.handle.is_submitting_gems())
+                marcella_near = true;
+        if (marcella_near && s.round - ms > 30) ms = s.round;
+        marcella_takes = g.gems > 0 && !(g.gold > VESPER_GOLD_RATIO * g.gems) &&
+                         (me_marcella || (marcella_near && s.round - ms <= VESPER_YIELD_ROUNDS));
+    }
+    if (((vesper_takes && !me_vesper) || (marcella_takes && !me_marcella)) && !broke) {
         if (g.spawn.is_set(s.me)) {
             const bc::bitboard off = move::square(s.me, 1) & ~g.spawn & ~mapinfo::terrain_blocked();
             if (move::step_toward(s, off)) return true;
@@ -724,6 +746,7 @@ bool capture_step(Snapshot& s, GroupInfo& g) {
     // One champion captures (more do not speed it up); the lowest body slot standing there keeps it.
     for (const AllyNow& a : s.allies) {
         if (vesper_takes && me_vesper) break;   // Vesper does not yield on gold groups
+        if (marcella_takes && me_marcella) break;   // G1: Marcella does not yield on gem groups
         if (broke) break;                       // a champion at 0 gold shares the capture
         const bool they_hold = g.spawn.is_set(a.pos);
         if (they_hold && (!g.spawn.is_set(s.me) || body_slot_of(a.type) < s.my_slot)) {
