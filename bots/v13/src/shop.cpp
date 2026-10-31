@@ -178,6 +178,8 @@ float value(bc::champion_type t, const Kit& k, const Stats& a, const Stats& b) {
 }
 
 St best_stat(bc::champion_type t, const Kit& k, const Stats& s) {
+    if constexpr (HOR_FOCUS_BUILD)
+        if (t == bc::champion_type::heart_of_ruin) return St::focus;   // test 1b: shield and dash scale with Focus
     St best = St::strength;
     float bv = -1e9f;
     for (St st : {St::strength, St::health, St::focus}) {

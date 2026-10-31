@@ -116,7 +116,16 @@ void mark_cast(Snapshot& s, const SlotFacts& f) {
 
 bool use_shield_if_hit(Snapshot& s) {
     auto& me = bc::self();
-    if (!me.can_cast() || !threatened(s) || s.health > SHIELD_BELOW_HEALTH * s.max_health) return false;
+    if constexpr (HOR_SHIELD_EAGER) {
+        // Test 1b: shield whenever damage is likely within ~5 turns (scrims: theirs cast 5.07 / 100 rounds, ours 2.47).
+        static float last_health = 0;   // being attacked = lost health since our last turn
+        bool likely = threatened(s) || s.health < last_health;
+        last_health = s.health;
+        for (const EnemyNow& e : s.enemies) likely = likely || (!e.on_their_spawn && e.pos.chebyshev_distance(s.me) <= HOR_SHIELD_ENEMY_RANGE);
+        if (!me.can_cast() || !likely) return false;
+    } else {
+        if (!me.can_cast() || !threatened(s) || s.health > SHIELD_BELOW_HEALTH * s.max_health) return false;
+    }
     for (const bc::ability& a : me.abilities()) {
         if (!a.is_shield() || a.cooldown() > 0 || !a.can_target_self()) continue;
         if (a.use()) { mark_cast(s, facts_of(a)); return true; }

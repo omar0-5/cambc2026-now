@@ -60,6 +60,11 @@ constexpr bool RESPAWN_WAIT_TARGET = false;
 // Test 2 (health discipline, Oct 31): retreat below DISCIPLINE_RETREAT_HEALTH within DISCIPLINE_WINDOW rounds of a camp
 // or an enemy nearby; no champion fight below FIGHT_MIN_HEALTH unless p_win >= FIGHT_LOW_HP_PWIN. false = v19.
 constexpr bool HEALTH_DISCIPLINE = false;
+// Test 1b: Heart of Ruin shields whenever off cooldown and damage is likely (awake camp / enemy within HOR_SHIELD_ENEMY_RANGE /
+// already hurt); HOR_FOCUS_BUILD: his shards are all Focus. false = v19.
+constexpr bool HOR_SHIELD_EAGER = false;
+constexpr int HOR_SHIELD_ENEMY_RANGE = 6;
+constexpr bool HOR_FOCUS_BUILD = false;
 constexpr double DISCIPLINE_RETREAT_HEALTH = 0.50;
 constexpr int DISCIPLINE_WINDOW = 10;
 constexpr double FIGHT_MIN_HEALTH = 0.40;

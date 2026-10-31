@@ -596,6 +596,8 @@ void champion_turn() {
         s.gold = static_cast<int>(me.gold_count());
         if (needs_heal(s)) { s.step = "heal"; hit_what_is_in_range(s); write_flags(s, false); log_turn(s); return; }
     }
+    if constexpr (HOR_SHIELD_EAGER)
+        if (s.my_type == bc::champion_type::heart_of_ruin && !s.on_our_spawn) actions::use_shield_if_hit(s);   // test 1b: every turn
     ladder(s);
     const bool channel_started = me.is_recalling() || me.is_submitting_gems();
     watchdog(s, channel_started);
