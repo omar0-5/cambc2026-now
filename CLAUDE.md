@@ -8,6 +8,15 @@ Each team drafts 3–5 champions. Champions kill monster camps, stand on the cle
 
 Full rules: `docs/GameRules.md`. C++ API: `docs/BotAPICpp.md` (large: search it, don't read it whole).
 
+## Goals (set 2026-10-31)
+
+- **Main goal: top 8 on the ladder by 8 Nov.** On 31 Oct we were #388 of 815, Elo 1,529 (#8 was ~2,318).
+- **4 Nov sprint is a bonus:** have the best passing build submitted before its cutoff. No freeze before 7 Nov.
+- **Measure gaps against the top teams, not our own versions:** ladder losses vs much higher-ranked teams and top-8 matches (`tools/gap_fetch.py`). Fix the biggest gap first.
+- **Pass rule for a change:** both map halves vs both baselines (`tools/tune.py`). Fight changes also need ladder or scrim evidence: the baselines are not aggressive. Scrims: `cambc match-groups create <team id>` (5 unranked matches, any rank, quota 50 groups).
+- After 8 Nov: resume Level 2 and prepare for the specific top-8 opponents for the finals.
+- Runs use 2 workers under `nice -n 19` (`bench.py` defaults to `--jobs 2`).
+
 ## Strategy document
 
 Every formula the bot uses (draft, group value V(g), P_die, banking, kill race, shopping, comms byte layouts, all `config.h` constants) is written up here:
@@ -52,6 +61,8 @@ Write replays and scratch output outside the repo (or in `replays/`, which is gi
 
 **After every change to this project, add an entry at the top of this list** (date, what changed, why, and how it was verified — e.g. build result and match scores). Keep each entry to a few lines.
 
+- **2026-10-31** — Gap analysis (`tools/gap_report.py`): our 150 ranked matches (v17, 03:00–07:50 UTC, 71–79) vs 180 matches of the top 11 non-dev teams. Per 100 rounds: camps cleared 2.35 vs 5.29, gems collected 63 vs 95, gold 332 vs 557; tributed by round 1,000 383 vs 628; first tribute r334 vs r231. In our 55 losses to higher-ranked teams: deaths by champions 11.4 vs 4.9, kills 4.5 vs 11.4, camps 27 vs 60. 01boss_battle: 0 gems tributed in 5 of our matches. Fix A variant (guard 15k / margin 2k): 148 wins vs fix A's 141 of 280, overruns 459 vs 452 — within noise.
+- **2026-10-31** — Step c + A live on the ladder (v18). Goals section added (top 8 by 8 Nov). Fix A follow-up: setup completes 1–2 rounds later than step c on 12 of 70 maps (same on 56, earlier on 1); variant guard 15k / margin 2k being benched. Fix B NOT committed: the idle-area build costs 190k median / 390k max fuel (unlimited-fuel measurement, 19 maps), more than a 100k turn, so a guard alone cannot work; the guard + cheap altar step + forced build code is in the working tree, unbenched. `tools/gap_fetch.py` pulls ladder summaries for the gap analysis; `tune.py --src`; `bench.py` default 2 jobs.
 - **2026-10-31** — Fix A (map setup fuel): a group's setup step starts only with (largest step measured this game) + `GROUP_SETUP_MARGIN` (5k) left, `GROUP_SETUP_FIRST_GUARD` (30k) before the first is measured (old guard: 12k vs steps up to 27k); the quadratic edge pass (`edge_exposure_of_tile`) resumes per monster tile, so one big group spans turns (01yellow-brick-road). Debug self-check (resumed = one pass) 0 failures. Bench vs step c (wins, v13 / v15 baseline): half A −3 / −4, half B −2 / −4; overruns 215 + 224 → 110 + 124 (A), 268 + 257 → 100 + 118 (B); 0 errors. Passes: 7 Nov build = step c + A. Fix B (investigated only): idle overruns come from `idle_area()`'s unguarded one-time build (13×13 tiles per altar, engine calls per tile) on a turn already low after the map build / side job.
 - **2026-10-30** — Tuning sweep (`tools/tune.py`: config overrides, one map half vs both baselines, compared with step c on the same matches; wins vs step c, v13 / v15 baseline, 70 matches each). Half A with P(death) × 0.16: all six modes −14 / −15; good three (FARM turn, RETREAT, EXPLORE) +2 / −5; + CARRY −7 / −10; + FARM squad −8 / −3; + FIGHT −5 / −3. On the good three: λ_T 2× −5 / −8, 3× −6 / −7; λ_D 0.5 0 / −4, 2.0 +1 / −7; gold 0.2 −4 / 0, 0.3 −2 / +2. Half B, good three: −6 / −8. Step c (Level 2 off) with gold 0.2: half A +3 / +8, half B −8 / 0 (30–40 vs v13-baseline) — fails. Gold 0.3 on step c, half A: +2 / 0. Nothing kept: step c ships.
 - **2026-10-30** — Level 2 is now a preprocessor switch (`#define LEVEL2 0` in `config.h`; every step d block, and `level2.cpp`, is inside `#if LEVEL2`). Off, the wasm is byte-identical to step c (9c7798a, tag `ladder-step-c`, submitted) and the bench reproduces it exactly: results.csv identical vs both baselines (77–63 +33, 77–63 +50). Per-mode switches are constexpr and folded away. P(death) log lines carry the mode being tried (`LEVEL2_LABEL`, no unlabelled predictions left). `bench.py` deletes each match's replay and JSON after parsing (`--keep` keeps them): 140-match benches filled the disk. Design doc's P(death) section has the 0.16 factor and calibration table.

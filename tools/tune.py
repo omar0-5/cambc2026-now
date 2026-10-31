@@ -37,11 +37,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("name")
     ap.add_argument("--half", choices=["A", "B"], required=True)
+    ap.add_argument("--src", default=str(ROOT / "bots" / "v13" / "src"), help="bot source to copy (default bots/v13/src)")
     ap.add_argument("sets", nargs="*")
     args = ap.parse_intermixed_args()
     work = ROOT / "replays" / "tune" / args.name
     shutil.rmtree(work, ignore_errors=True)
-    shutil.copytree(ROOT / "bots" / "v13" / "src", work / "bot" / "src")
+    shutil.copytree(args.src, work / "bot" / "src")
     cfg = work / "bot" / "src" / "config.h"
     text = cfg.read_text()
     for kv in args.sets:

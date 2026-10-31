@@ -64,7 +64,7 @@ def main():
     ap.add_argument("--maps", default="all")
     ap.add_argument("--half", choices=["A", "B"], help="tuning split: maps sorted by name, A = 1st, 3rd, ...; B = 2nd, 4th, ...")
     ap.add_argument("--keep", action="store_true", help="keep replays and statistics JSON (default: deleted after parsing)")
-    ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--jobs", type=int, default=2)
     ap.add_argument("--out")
     args = ap.parse_args()
     a, b = (ROOT / args.bot_a).resolve(), (ROOT / args.bot_b).resolve()
