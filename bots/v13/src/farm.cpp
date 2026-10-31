@@ -710,7 +710,7 @@ bool capture_step(Snapshot& s, GroupInfo& g) {
     bool vesper_near = false;
     for (const AllyNow& a : s.allies)
         if (a.type == bc::champion_type::vesper_vale && a.pos.chebyshev_distance(g.centre) <= VESPER_CAPTURE_RANGE &&
-            !a.handle.is_recalling() && !a.handle.is_submitting_gems())
+            a.handle.is_visible() && !a.handle.is_recalling() && !a.handle.is_submitting_gems())
             vesper_near = true;
     if (vesper_near && s.round - ys > 30) ys = s.round;   // a new yield episode
     const bool still_yielding = s.round - ys <= VESPER_YIELD_ROUNDS;
@@ -726,7 +726,7 @@ bool capture_step(Snapshot& s, GroupInfo& g) {
         bool marcella_near = false;
         for (const AllyNow& a : s.allies)
             if (a.type == bc::champion_type::marcella && a.pos.chebyshev_distance(g.centre) <= VESPER_CAPTURE_RANGE &&
-                !a.handle.is_recalling() && !a.handle.is_submitting_gems())
+                a.handle.is_visible() && !a.handle.is_recalling() && !a.handle.is_submitting_gems())
                 marcella_near = true;
         if (marcella_near && s.round - ms > 30) ms = s.round;
         marcella_takes = g.gems > 0 && !(g.gold > VESPER_GOLD_RATIO * g.gems) &&
