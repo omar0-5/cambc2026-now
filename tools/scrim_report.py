@@ -18,14 +18,22 @@ S = ROOT / "replays/gap/s"
 
 
 def show_group(gid):
-    """cambc match-groups show with retries (bursts of requests come back empty: rate limit)."""
-    for wait in (0, 3, 10, 30, 60):
+    """cambc match-groups show with retries (bursts of requests come back empty: rate limit). Finished groups are cached
+    in replays/gap/groups/ (they never change)."""
+    cache = ROOT / "replays/gap/groups" / f"{gid}.json"
+    if cache.exists():
+        return json.load(open(cache))
+    for wait in (0, 3, 10, 30, 60, 120):
         time.sleep(wait)
         out = subprocess.run([C, "match-groups", "show", gid, "--json"], capture_output=True, text=True).stdout
         try:
-            return json.loads(out)
+            g = json.loads(out)
         except ValueError:
             continue
+        if g.get("matches") and all(m.get("status") == "finished" for m in g["matches"]):
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            json.dump(g, open(cache, "w"))
+        return g
     raise RuntimeError(f"match-groups show {gid}: no answer after retries")
 
 

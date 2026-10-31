@@ -66,6 +66,8 @@ constexpr bool HOR_SHIELD_EAGER = false;
 constexpr int HOR_SHIELD_ENEMY_RANGE = 6;
 constexpr bool HOR_FOCUS_BUILD = false;
 // Gold test (Oct 31; we earn 40 gold / 100 rounds per champion, top teams 165). Defaults = v21.
+constexpr bool FAKE_RECALL_GUARD = false;        // treat an enemy recall as channeling only at <= RECALL_TRUST_TICKS left
+constexpr int RECALL_TRUST_TICKS = 3;            // recall is 5 ticks; a fake one (restarted every turn) shows 4
 constexpr bool MARCELLA_CAPTURES = false;        // G1: allies yield gem-group captures to Marcella (2 gold per gem she tributes)
 constexpr int EARLY_GOLD_ROUNDS = 0;             // G2: before this round, value gold at EARLY_GOLD_LAMBDA gems (no gold-only halving)
 constexpr double EARLY_GOLD_LAMBDA = 0.30;

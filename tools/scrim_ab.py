@@ -15,19 +15,30 @@ C = str(ROOT / ".venv/bin/cambc")
 
 
 def main():
-    out = []
+    # resume: keep groups already queued into OUT (matched by opponent + maps)
+    out = json.load(open(sys.argv[1])) if pathlib.Path(sys.argv[1]).exists() else []
+    done = {(tid, tuple(maps)) for tid, maps, _ in out}
     for spec in sys.argv[2:]:
         path, _, mode = spec.partition(":")
         for i, (tid, maps, gid) in enumerate(json.load(open(path))):
             if not gid:
                 continue
+            if (tid, tuple(maps)) in done:
+                continue
             sides = "a,b,a,b,a" if mode != "alternate" or i % 2 == 0 else "b,a,b,a,b"
-            r = subprocess.run([C, "match-groups", "create", tid, "--source-group", gid, "--maps", ",".join(maps), "--sides", sides, "--json"],
-                               capture_output=True, text=True)
-            try:
-                new = json.loads(r.stdout)["groupId"]
-            except (ValueError, KeyError):
-                print("ERR", gid[:8], r.stdout[-200:], r.stderr[-200:])
+            new = None
+            for wait in (0, 3, 10, 30, 60):   # HTTP 429 when other tools hit the API at the same time
+                time.sleep(wait)
+                r = subprocess.run([C, "match-groups", "create", tid, "--source-group", gid, "--maps", ",".join(maps), "--sides", sides, "--json"],
+                                   capture_output=True, text=True)
+                try:
+                    new = json.loads(r.stdout)["groupId"]
+                    break
+                except (ValueError, KeyError):
+                    if "429" not in r.stdout + r.stderr:
+                        print("ERR", gid[:8], r.stdout[-200:], r.stderr[-200:])
+                        break
+            if not new:
                 continue
             out.append((tid, maps, new))
             time.sleep(1)

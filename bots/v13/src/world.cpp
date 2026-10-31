@@ -85,7 +85,12 @@ EnemyNow read_enemy(const bc::champion& c) {
     const bc::buff_collection buffs = c.buffs();
     const float shield = buffs.has_shield() ? buffs.get<bc::buff_shield>().value : 0.0f;
     const vec2 p = c.position();
-    const bool channel = c.is_submitting_gems() || c.is_recalling();
+    bool channel = c.is_submitting_gems() || c.is_recalling();
+    // Fake-recall guard (decoded #1 Intercontinental Fish replays, Oct 31): they start a recall at the end of every turn and
+    // cancel it first thing next turn, so they always look "channeling" - our chase / interrupt rules walked into them. A real
+    // recall counts down; trust it only once it has progressed.
+    if constexpr (FAKE_RECALL_GUARD)
+        if (!c.is_submitting_gems() && c.is_recalling() && c.remaining_channel_time() > RECALL_TRUST_TICKS) channel = false;
     return EnemyNow{c, p, c.champion_name(), c.health(), std::max(1.0f, c.max_health()), shield, c.strength(),
                     c.focus(), static_cast<int>(c.gem_count()), c.attack_range(), channel,
                     bc::map::spawn_region(bc::team::enemy).is_set(p), buffs.has_stun()};
