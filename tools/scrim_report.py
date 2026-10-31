@@ -61,6 +61,9 @@ def main():
                 a, b = team_stats(d, "team" + us["side"].upper()), team_stats(d, "team" + th["side"].upper())
                 per, _clears, _att, _n = breakdown(d, "team" + us["side"].upper())
                 a["dead_pct"] = statistics.mean(c["dead"] for _, c in per.values()) if per else 0.0
+                ours = [c for c in d["champions"] if c["team"] == "team" + us["side"].upper()]
+                a["dmg_done"] = sum(float(c["metrics"]["championDamageDone"]) for c in ours)
+                a["dmg_taken"] = sum(float(c["metrics"]["championDamageTaken"]) for c in ours)
                 agg.append(a)
             total += 1
             wins += us["result"] == "win"
@@ -73,7 +76,8 @@ def main():
     if agg:
         m = lambda k: statistics.mean(x[k] for x in agg)
         print(f"  gems by r1000 {m('gems_r1000'):.0f}, deaths {m('deaths'):.1f}, kills {m('kills'):.1f}, "
-              f"camps/100 rounds {statistics.mean(x['camps'] / x['rounds'] * 100 for x in agg):.2f}, death time {m('dead_pct'):.1f}%")
+              f"camps/100 rounds {statistics.mean(x['camps'] / x['rounds'] * 100 for x in agg):.2f}, death time {m('dead_pct'):.1f}%, "
+              f"damage done/taken {sum(x['dmg_done'] for x in agg) / max(1.0, sum(x['dmg_taken'] for x in agg)):.2f}")
 
 
 if __name__ == "__main__":
