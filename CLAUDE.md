@@ -19,7 +19,7 @@ Full rules: `docs/GameRules.md`. C++ API: `docs/BotAPICpp.md` (large: search it,
 
 ## Ladder submissions
 
-**Fallback: v21** (`cambc submissions activate 21`). Roll back to it as soon as scrims show a new version is worse. Log every submission here: time, version, Elo, rank.
+**Fallback: v23** (`cambc submissions activate 23`). Roll back to it as soon as scrims show a new version is worse. Log every submission here: time, version, Elo, rank.
 
 | Submitted (UTC) | Version | Code | Elo / rank at submission | Elo / rank later | Notes |
 | --- | --- | --- | --- | --- | --- |
@@ -40,6 +40,8 @@ Scrims play the live version only. Loop: local pass → user submits → scrims 
 | 10-31 09:1x | v20 | wide: 15 groups each vs #1–10 (1–69), #11–50 (0–80), #51–150 (0–75) | 1–224 | 204 | 15.3 | 0.9 | 2.36 | 21.9% |
 | 10-31 10:1x | v21 | exact A/B of v20 reference (`--source-group`) | 1–24 | 236 | 11.3 | 1.4 | 2.31 | 13.5% (v20 17.1%); damage ratio 0.30 (v20 0.31) |
 | 10-31 10:1x | v21 | exact A/B of v20 wide (#1–10 1–69, #11–50 0–80, #51–150 3–72) | 4–221 | 214 | 14.8 | 1.0 | 2.41 | 21.1% (v20 22.0%); damage ratio 0.29 (v20 0.29) |
+| 10-31 12:2x | v23 | exact A/B of v21 reference | 3–22 | 274 | 9.7 | 1.4 | 2.55 | 12.7% (v21 13.5%); damage ratio 0.36 (v21 0.30) |
+| 10-31 12:3x | v23 | exact A/B of v21 wide | 8–217 | 211 | 15.2 | 1.2 | 2.45 | 21.2% (v21 21.1%); damage ratio 0.32 (v21 0.29) → kept, new fallback |
 | 10-31 11:2x | v22 | exact A/B of v21 reference | 0–25 | 224 | 11.5 | 1.0 | 2.31 | 14.4% (v21 13.5%); damage ratio 0.27 (v21 0.30) |
 | 10-31 11:2x | v22 | exact A/B of v21 wide | 4–221 | 205 | 15.0 | 1.0 | 2.39 | 21.5% (v21 21.1%); damage ratio 0.28 (v21 0.29); HoR shield 4.30 casts / 100 rounds (v21 2.68), 154 per cast (unchanged: he buys ~160 gold of items) |
 
