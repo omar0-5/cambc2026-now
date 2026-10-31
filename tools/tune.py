@@ -25,6 +25,27 @@ def override(config, key, value):
     return new
 
 
+def gap_metrics(out):
+    """Gems tributed by r1000, deaths and kills of our side (from each match's statistics), then delete the files."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    from gap_report import team_stats
+    import json
+    import statistics
+    rows = []
+    for js in out.glob("*.json"):
+        side = js.stem.rsplit("-", 1)[1]   # <map>-<a|b>: our bot is team A on side a
+        try:
+            rows.append(team_stats(json.load(open(js)), "team" + side.upper()))
+        except (KeyError, ValueError):
+            pass
+    for f in [*out.glob("*.json"), *out.glob("*.repl26a")]:
+        f.unlink()
+    if not rows:
+        return "no statistics"
+    m = lambda k: statistics.mean(r[k] for r in rows)
+    return f"gems r1000 {m('gems_r1000'):.0f}, deaths {m('deaths'):.1f}, kills {m('kills'):.1f}"
+
+
 def summary(rows):
     w = sum(r["result"] == "W" for r in rows)
     gems = sum(int(r["gems_a"]) - int(r["gems_b"]) for r in rows) / max(1, len(rows))
@@ -38,6 +59,7 @@ def main():
     ap.add_argument("name")
     ap.add_argument("--half", choices=["A", "B"], required=True)
     ap.add_argument("--src", default=str(ROOT / "bots" / "v13" / "src"), help="bot source to copy (default bots/v13/src)")
+    ap.add_argument("--jobs", type=int, default=2)
     ap.add_argument("sets", nargs="*")
     args = ap.parse_intermixed_args()
     work = ROOT / "replays" / "tune" / args.name
@@ -52,14 +74,15 @@ def main():
     for base in ("v13-baseline", "v15-baseline"):
         out = work / f"vs-{base}"
         subprocess.run([sys.executable, str(ROOT / "tools/bench.py"), str(work / "bot"), f"bots/{base}", "--half", args.half,
-                        "--out", str(out)], check=False, stdout=subprocess.DEVNULL)
+                        "--out", str(out), "--jobs", str(args.jobs), "--keep"], check=False, stdout=subprocess.DEVNULL)
+        extra = gap_metrics(out)
         mine = list(csv.DictReader(open(out / "results.csv")))
         keys = {(r["map"], r["a_side"]) for r in mine}
         ref = [r for r in csv.DictReader(open(ROOT / "replays/bench" / f"c-vs-{base}" / "results.csv")) if (r["map"], r["a_side"]) in keys]
         a, c = summary(mine), summary(ref)
         flips = sum(1 for x in mine for y in ref if (x["map"], x["a_side"]) == (y["map"], y["a_side"]) and x["result"] != y["result"])
         print(f"{args.name} half {args.half} vs {base}: {a[0]}-{a[1]} {a[2]:+.0f} gems, fuel out {a[3]}, errors {a[4]}"
-              f" | step c {c[0]}-{c[1]} {c[2]:+.0f}, fuel out {c[3]} | win diff {a[0] - c[0]:+d}, {flips} flips", flush=True)
+              f" | step c {c[0]}-{c[1]} {c[2]:+.0f}, fuel out {c[3]} | win diff {a[0] - c[0]:+d}, {flips} flips | {extra}", flush=True)
 
 
 if __name__ == "__main__":
