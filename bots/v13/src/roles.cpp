@@ -57,6 +57,16 @@ void hit_what_is_in_range(Snapshot& s) {
 bool must_retreat(const Snapshot& s) {
     if (s.on_our_spawn) return false;
     if (s.health < RETREAT_HEALTH * s.max_health) return true;
+    if constexpr (HEALTH_DISCIPLINE) {
+        // Test 2 (Oct 31 scrims: 15 deaths, 0.9 kills a game): after a camp or an enemy sighting nearby within the last
+        // DISCIPLINE_WINDOW rounds, go home below DISCIPLINE_RETREAT_HEALTH instead of farming on hurt.
+        static int last_danger = -1000;
+        for (const EnemyNow& e : s.enemies)
+            if (!e.on_their_spawn && e.pos.chebyshev_distance(s.me) <= ENGAGE_RANGE) last_danger = s.round;
+        for (const CampNow& c : s.camps)
+            if (c.awake && c.strength > 0 && c.pos.chebyshev_distance(s.me) <= c.attack_range + 1) last_danger = s.round;
+        if (s.round - last_danger <= DISCIPLINE_WINDOW && s.health < DISCIPLINE_RETREAT_HEALTH * s.max_health) return true;
+    }
 
     int escape_rounds = static_cast<int>(RETREAT_ROUNDS);
     for (const CampNow& c : s.camps)

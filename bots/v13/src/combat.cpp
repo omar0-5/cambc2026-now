@@ -310,6 +310,9 @@ FightPlan decide_fight(const Snapshot& s) {
         if (!fight && r.catchable && r.us >= r.them && r.chance >= ALTAR_GUARD_PWIN &&
             mapinfo::steps_to_altar(e.pos) <= ALTAR_GUARD_RANGE)
             fight = true;
+        // Test 2: never start or join a champion fight hurt unless the kill race is clearly ours.
+        if constexpr (HEALTH_DISCIPLINE)
+            if (fight && s.health < FIGHT_MIN_HEALTH * s.max_health && r.chance < FIGHT_LOW_HP_PWIN) fight = false;
 #if LEVEL2
         double value = kill_value(e, r.ours) + (engaged ? 1000.0 : 0.0);   // answer attackers first
         if (scored) {

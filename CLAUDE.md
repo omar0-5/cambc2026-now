@@ -17,6 +17,15 @@ Full rules: `docs/GameRules.md`. C++ API: `docs/BotAPICpp.md` (large: search it,
 - After 8 Nov: resume Level 2 and prepare for the specific top-8 opponents for the finals.
 - Runs use 2 workers under `nice -n 19` (`bench.py` defaults to `--jobs 2`).
 
+## Ladder submissions
+
+**Fallback: v20** (`cambc submissions activate 20`). Roll back to it as soon as scrims show a new version is worse. Log every submission here: time, version, Elo, rank.
+
+| Submitted (UTC) | Version | Code | Elo / rank at submission | Elo / rank later | Notes |
+| --- | --- | --- | --- | --- | --- |
+| 2026-10-31 ~09:05 | v20 | v18 + side-job hysteresis (2b4ce69, tag `ladder-v19`) | 1,529 / #388 (Oct 31 morning, v18) | 1,571 / #346 (Oct 31, user) | live 09:12; fallback |
+| 2026-10-31 (earlier) | v18 | step c + fix A (7d64cac) | — | 1,529 / #388 | previous fallback |
+
 ## Scrim results per version
 
 Scrims play the live version only. Loop: local pass → user submits → scrims → keep or roll back. Quota: 50 groups (250 games) per hour from the first group queued (`cambc match-groups quota`). `tools/scrim_queue.py` queues bands, `tools/scrim_report.py` reports a batch, `tools/death_report.py` breaks down our deaths. `--source-group <id>` replays an earlier group's opponent bot versions (exact A/B; matches are deterministic).

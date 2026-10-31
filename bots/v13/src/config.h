@@ -57,6 +57,13 @@ constexpr int SIDE_JOB_MAIN_CLOSE = 3;
 constexpr int SIDE_JOB_MAX_DETOUR = 99;   // the 2-tile detour filter cost as much as the hysteresis saved (farm test 4.20 vs 5.04)
 // Gap 1 (c): wait at the nearest feasible group when it respawns within (walk + kill time) of the chosen one. false = v18.
 constexpr bool RESPAWN_WAIT_TARGET = false;
+// Test 2 (health discipline, Oct 31): retreat below DISCIPLINE_RETREAT_HEALTH within DISCIPLINE_WINDOW rounds of a camp
+// or an enemy nearby; no champion fight below FIGHT_MIN_HEALTH unless p_win >= FIGHT_LOW_HP_PWIN. false = v19.
+constexpr bool HEALTH_DISCIPLINE = false;
+constexpr double DISCIPLINE_RETREAT_HEALTH = 0.50;
+constexpr int DISCIPLINE_WINDOW = 10;
+constexpr double FIGHT_MIN_HEALTH = 0.40;
+constexpr double FIGHT_LOW_HP_PWIN = 0.85;
 // Gap 1 (a): target value uses walking steps (per-group fields built in leftover fuel at turn end) instead of
 // 1.2 x straight-line distance. false = v18.
 #define WALK_TARGETING 0   // preprocessor switch: 0 compiles exactly v18 (a constexpr flag still changed the wasm)
