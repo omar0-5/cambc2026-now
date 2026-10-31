@@ -293,6 +293,18 @@ void buy_all(const Snapshot& s) {
 }
 
 bool maybe_trip(Snapshot& s) {
+    // Test 3: Marcella shops right after each bank (Fish's Marcella: 2.7 shop visits / 100 rounds, first at r65).
+    if constexpr (MARCELLA_SHOP_AFTER_BANK) {
+        static int prev_bag = 0, banked_round = -1000;
+        if (prev_bag > 0 && s.bag == 0 && !s.on_our_spawn) banked_round = s.round;
+        prev_bag = s.bag;
+        if (s.my_type == bc::champion_type::marcella && s.round - banked_round <= 10 && s.bag == 0 && !s.on_our_spawn &&
+            s.gold >= MARCELLA_SHOP_GOLD && bank::recall_is_safe(s)) {
+            banked_round = -1000;
+            bc::self().recall();
+            return true;
+        }
+    }
     // G3 (gold test): early, spend each shard's worth when spawn is close.
     if constexpr (EARLY_SHOP_ROUNDS > 0)
     if (s.round < EARLY_SHOP_ROUNDS && !s.on_our_spawn && s.gold >= EARLY_SHOP_GOLD && s.bag == 0 && mapinfo::steps_from_us(s.me) <= EARLY_SHOP_STEPS &&

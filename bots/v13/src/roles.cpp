@@ -432,6 +432,26 @@ void run_explore(Snapshot& s) {
 void modes_5_to_8(Snapshot& s) {
     support_heal(s);          // v11: free cast for the Support role (outside the modes)
     maybe_lock_altar(s);      // v11: free consumable action (outside the modes)
+    if constexpr (SPACING_ENGAGE) {
+        // Test #2 (decoded Fish replays: nearest ally 2-3 tiles at fight entry, ours 5-6; we die alone 52%): with an enemy
+        // seen nearby recently, close up on the nearest visible ally before farming on. Never off a capture tile.
+        static int last_threat = -1000;
+        for (const EnemyNow& e : s.enemies)
+            if (!e.on_their_spawn && e.pos.chebyshev_distance(s.me) <= GROUP_THREAT_RANGE) last_threat = s.round;
+        const int g = farm::current_group();
+        const bool capturing = g != NO_GROUP && mapinfo::groups()[static_cast<std::size_t>(g)].spawn.is_set(s.me);
+        if (s.round - last_threat <= GROUP_THREAT_WINDOW && !capturing && !s.allies.empty()) {
+            const AllyNow* best = nullptr;
+            for (const AllyNow& a : s.allies)
+                if (!best || a.pos.chebyshev_distance(s.me) < best->pos.chebyshev_distance(s.me)) best = &a;
+            if (best->pos.chebyshev_distance(s.me) > GROUP_RANGE) {
+                s.step = "group-up";
+                hit_what_is_in_range(s);
+                move::step_toward(s, move::square(best->pos, 1));
+                return;
+            }
+        }
+    }
     const bool holding = (g_mode.mode == Mode::Farm || g_mode.mode == Mode::Explore || g_mode.mode == Mode::Support) &&
                          s.round - g_mode.since < MODE_HOLD_TURNS;
     if (holding) {

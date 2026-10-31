@@ -68,7 +68,16 @@ constexpr bool HOR_FOCUS_BUILD = false;
 // Gold test (Oct 31; we earn 40 gold / 100 rounds per champion, top teams 165). Defaults = v21.
 constexpr bool FAKE_RECALL_GUARD = false;        // treat an enemy recall as channeling only at <= RECALL_TRUST_TICKS left
 constexpr int RECALL_TRUST_TICKS = 3;            // recall is 5 ticks; a fake one (restarted every turn) shows 4
-constexpr bool MARCELLA_CAPTURES = false;        // G1: allies yield gem-group captures to Marcella (2 gold per gem she tributes)
+// Test #2 spacing + engagement (decoded Fish replays). false = v23.
+constexpr bool SPACING_ENGAGE = false;
+constexpr int GROUP_RANGE = 3;             // close up to within this of the nearest visible ally...
+constexpr int GROUP_THREAT_RANGE = 10;     // ...when an enemy champion was seen within this many tiles...
+constexpr int GROUP_THREAT_WINDOW = 10;    // ...in the last this many rounds
+constexpr int FIGHT_ADVANTAGE = 1;         // start a fight only with our side >= theirs + this within 5 tiles
+constexpr bool MARCELLA_CAPTURES = false;
+constexpr int MARCELLA_BANK_BAG = 0;             // test 3: Marcella banks at this bag wherever the altar is (0 = off; Fish ~33)
+constexpr bool MARCELLA_SHOP_AFTER_BANK = false; // test 3: ...and recalls to shop right after, with >= MARCELLA_SHOP_GOLD
+constexpr int MARCELLA_SHOP_GOLD = 60;        // G1: allies yield gem-group captures to Marcella (2 gold per gem she tributes)
 constexpr int EARLY_GOLD_ROUNDS = 0;             // G2: before this round, value gold at EARLY_GOLD_LAMBDA gems (no gold-only halving)
 constexpr double EARLY_GOLD_LAMBDA = 0.30;
 constexpr int EARLY_SHOP_ROUNDS = 0;             // G3: before this round, shop trip at EARLY_SHOP_GOLD within EARLY_SHOP_STEPS of spawn

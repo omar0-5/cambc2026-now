@@ -145,6 +145,9 @@ BankChoice bank_choice(const Snapshot& s) {
     const double bank_factor = s.my_type == bc::champion_type::prism && s.health > 0.6 * s.max_health ? PRISM_BANK_FACTOR : 1.0;
     if (is_farming_pair(s.role)) {
         if (s.bag >= CHEAP_BANK_BAG && steps <= CHEAP_BANK_STEPS) return BankChoice::GoTribute;
+        // Test 3 (Fish's Marcella: bag median 33, first tribute r54): Marcella banks at MARCELLA_BANK_BAG wherever the altar is.
+        if constexpr (MARCELLA_BANK_BAG > 0)
+            if (s.my_type == bc::champion_type::marcella && s.bag >= MARCELLA_BANK_BAG) return escalate(s, pd);
         // Far altars: bank once the bag pays for the walk (rushbait, Oct 24: Marcella carried 598 gems
         // 36 steps from the nearest altar and never banked). Example: 36 steps -> 20 + 1.0 x 36 = 56 gems.
         // Capped (v10): shortcut, Oct 25 online: a 110-step altar made the threshold 140 and HoR carried

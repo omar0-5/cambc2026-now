@@ -259,7 +259,11 @@ int cornered_target_of(const Snapshot& s) {
     }
     if (!chased || incoming <= 0) return -1;
     const double rounds_alive = my_effective_health(s) / incoming;
-    if (mapinfo::steps_from_us(s.me) < rounds_alive) return -1;   // home in time: run
+    bool alone = true;
+    for (const AllyNow& a : s.allies) alone = alone && a.pos.chebyshev_distance(s.me) > 5;
+    // Test #2: alone and chased by melee / dash, walking away lost every exchange (56% of our deaths: hit, no hit back): trade.
+    const bool trade = SPACING_ENGAGE && alone;
+    if (!trade && mapinfo::steps_from_us(s.me) < rounds_alive) return -1;   // home in time: run
     int best = -1;
     double best_ehp = 1e18;
     const int reach = my_reach(s);
@@ -310,6 +314,14 @@ FightPlan decide_fight(const Snapshot& s) {
         if (!fight && r.catchable && r.us >= r.them && r.chance >= ALTAR_GUARD_PWIN &&
             mapinfo::steps_to_altar(e.pos) <= ALTAR_GUARD_RANGE)
             fight = true;
+        // Test #2: start a fight (not one we are in) only with our side >= theirs + FIGHT_ADVANTAGE within 5 tiles (Fish: 3.0 vs 1.8).
+        if constexpr (SPACING_ENGAGE)
+            if (fight && !engaged) {
+                int ours = 1, theirs = 0;
+                for (const AllyNow& a : s.allies) ours += a.pos.chebyshev_distance(s.me) <= 5 ? 1 : 0;
+                for (const EnemyNow& x : s.enemies) theirs += !x.on_their_spawn && x.pos.chebyshev_distance(e.pos) <= 5 ? 1 : 0;
+                if (ours < theirs + FIGHT_ADVANTAGE) fight = false;
+            }
         // Test 2: never start or join a champion fight hurt unless the kill race is clearly ours.
         if constexpr (HEALTH_DISCIPLINE)
             if (fight && s.health < FIGHT_MIN_HEALTH * s.max_health && r.chance < FIGHT_LOW_HP_PWIN) fight = false;
