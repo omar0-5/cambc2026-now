@@ -19,11 +19,11 @@ Full rules: `docs/GameRules.md`. C++ API: `docs/BotAPICpp.md` (large: search it,
 
 ## Ladder submissions
 
-**Fallback: v20** (`cambc submissions activate 20`). Roll back to it as soon as scrims show a new version is worse. Log every submission here: time, version, Elo, rank.
+**Fallback: v21** (`cambc submissions activate 21`). Roll back to it as soon as scrims show a new version is worse. Log every submission here: time, version, Elo, rank.
 
 | Submitted (UTC) | Version | Code | Elo / rank at submission | Elo / rank later | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 2026-10-31 ~10:05 | v21 | v20 + `SHOP_TOP_BUILD` (top teams' Bruiser + Durability Health build); local vs ganker + v15-baseline, both halves: 158 vs 145 wins, deaths and death time down, damage ratio up, overruns 502 vs 556 | 1,555 / #360 (10:10, v20 live) | | submit copy `replays/submit/v21` |
+| 2026-10-31 ~10:05 | v21 | v20 + `SHOP_TOP_BUILD` (top teams' Bruiser + Durability Health build); local vs ganker + v15-baseline, both halves: 158 vs 145 wins, deaths and death time down, damage ratio up, overruns 502 vs 556 | 1,555 / #360 (10:10, v20 live) | | live 10:14; scrims slightly better than v20 → new fallback; submit copy `replays/submit/v21` |
 | 2026-10-31 ~09:05 | v20 | v18 + side-job hysteresis (2b4ce69, tag `ladder-v19`) | 1,529 / #388 (Oct 31 morning, v18) | 1,571 / #346 (Oct 31, user) | live 09:12; fallback |
 | 2026-10-31 (earlier) | v18 | step c + fix A (7d64cac) | — | 1,529 / #388 | previous fallback |
 
@@ -36,6 +36,8 @@ Scrims play the live version only. Loop: local pass → user submits → scrims 
 | 10-31 07:5x | v18 | reference: 5 teams #30–103, 25 maps | 2–23 | 305 | 10.2 | 1.3 | 2.14 | 11.9% |
 | 10-31 09:1x | v20 (= v19 code) | reference, same teams / maps / sides (opponents may have updated) | 1–24 | 211 | 12.9 | 0.9 | 2.07 | 17.1% |
 | 10-31 09:1x | v20 | wide: 15 groups each vs #1–10 (1–69), #11–50 (0–80), #51–150 (0–75) | 1–224 | 204 | 15.3 | 0.9 | 2.36 | 21.9% |
+| 10-31 10:1x | v21 | exact A/B of v20 reference (`--source-group`) | 1–24 | 236 | 11.3 | 1.4 | 2.31 | 13.5% (v20 17.1%); damage ratio 0.30 (v20 0.31) |
+| 10-31 10:1x | v21 | exact A/B of v20 wide (#1–10 1–69, #11–50 0–80, #51–150 3–72) | 4–221 | 214 | 14.8 | 1.0 | 2.41 | 21.1% (v20 22.0%); damage ratio 0.29 (v20 0.29) |
 
 ## Strategy document
 
