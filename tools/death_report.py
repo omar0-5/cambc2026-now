@@ -14,6 +14,7 @@ import pathlib
 import statistics
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from time_breakdown import per_round, rises  # noqa: E402
@@ -21,6 +22,18 @@ from time_breakdown import per_round, rises  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 C = str(ROOT / ".venv/bin/cambc")
 S = ROOT / "replays/gap/s"
+
+
+def show_group(gid):
+    """cambc match-groups show with retries (bursts of requests come back empty: rate limit)."""
+    for wait in (0, 3, 10, 30, 60):
+        time.sleep(wait)
+        out = subprocess.run([C, "match-groups", "show", gid, "--json"], capture_output=True, text=True).stdout
+        try:
+            return json.loads(out)
+        except ValueError:
+            continue
+    raise RuntimeError(f"match-groups show {gid}: no answer after retries")
 
 
 def activity(tl, ev, r):
@@ -79,7 +92,7 @@ def main():
     deaths, games = [], 0
     for plan in sys.argv[1:]:
         for _tid, _maps, gid in json.load(open(plan)):
-            g = json.loads(subprocess.run([C, "match-groups", "show", gid, "--json"], capture_output=True, text=True).stdout)
+            g = show_group(gid)
             for m in g["matches"]:
                 if m.get("status") != "finished":
                     continue

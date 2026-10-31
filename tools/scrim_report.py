@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Results of queued scrim groups (cambc match-groups), with the gap metrics per match.
-Usage: python3 tools/scrim_report.py replays/gap/scrims_before.json   (file from the queueing step: [[team, maps, groupId], ...])"""
+Usage: python3 tools/scrim_report.py replays/gap/scrims_before.json [--wait]   (file from the queueing step: [[team, maps, groupId], ...])"""
 import json
 import pathlib
 import subprocess
@@ -17,15 +17,34 @@ C = str(ROOT / ".venv/bin/cambc")
 S = ROOT / "replays/gap/s"
 
 
+def show_group(gid):
+    """cambc match-groups show with retries (bursts of requests come back empty: rate limit)."""
+    for wait in (0, 3, 10, 30, 60):
+        time.sleep(wait)
+        out = subprocess.run([C, "match-groups", "show", gid, "--json"], capture_output=True, text=True).stdout
+        try:
+            return json.loads(out)
+        except ValueError:
+            continue
+    raise RuntimeError(f"match-groups show {gid}: no answer after retries")
+
+
 def main():
     groups = json.load(open(sys.argv[1]))
+    if "--wait" in sys.argv:   # until every match of the batch has finished
+        while True:
+            left = sum(m.get("status") != "finished" for _t, _m, gid in groups if gid for m in show_group(gid)["matches"])
+            if left == 0:
+                break
+            print(f"{time.strftime('%H:%M', time.gmtime())} unfinished {left}", flush=True)
+            time.sleep(180)
     me = json.load(open(ROOT / "replays/gap/ranks.json"))["me"]["id"]
     ranks = json.load(open(ROOT / "replays/gap/ranks.json"))["ranks"]
     S.mkdir(parents=True, exist_ok=True)
     wins = total = 0
     agg = []
     for team, _maps, gid in groups:
-        g = json.loads(subprocess.run([C, "match-groups", "show", gid, "--json"], capture_output=True, text=True).stdout)
+        g = show_group(gid)
         for m in g["matches"]:
             if m.get("status") != "finished":
                 print(f"  {m.get('map')}: {m.get('status')}")

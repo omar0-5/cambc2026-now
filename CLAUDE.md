@@ -25,6 +25,7 @@ Scrims play the live version only. Loop: local pass → user submits → scrims 
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 10-31 07:5x | v18 | reference: 5 teams #30–103, 25 maps | 2–23 | 305 | 10.2 | 1.3 | 2.14 | 11.9% |
 | 10-31 09:1x | v20 (= v19 code) | reference, same teams / maps / sides (opponents may have updated) | 1–24 | 211 | 12.9 | 0.9 | 2.07 | 17.1% |
+| 10-31 09:1x | v20 | wide: 15 groups each vs #1–10 (1–69), #11–50 (0–80), #51–150 (0–75) | 1–224 | 204 | 15.3 | 0.9 | 2.36 | 21.9% |
 
 ## Strategy document
 
