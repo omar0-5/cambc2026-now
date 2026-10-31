@@ -49,7 +49,20 @@ constexpr int STUN_WAIT_TURNS = 3;
 constexpr int AVOID_ROUNDS = 15;
 constexpr int AVOID_STREAK = 3;       // walk-aways in a row (each within 4 rounds) before a group is avoided      // after walking away from a threat, skip that group this long   // max turns to wait next to an altar for a stun threat to pass
 constexpr bool SIDE_JOBS = true;               // v9: take a solo group nearby instead of waiting
-constexpr int SIDE_JOB_RANGE = 12;             // ...within this many tiles       // gold-only groups are worth half (gems win the game)
+constexpr int SIDE_JOB_RANGE = 12;
+// Gap 1 (b): keep a side job until done unless the main target is workable within SIDE_JOB_MAIN_CLOSE tiles; take only
+// side jobs whose detour to the main target is <= SIDE_JOB_MAX_DETOUR tiles. false = v18.
+constexpr bool SIDE_JOB_HYSTERESIS = false;
+constexpr int SIDE_JOB_MAIN_CLOSE = 3;
+constexpr int SIDE_JOB_MAX_DETOUR = 2;
+// Gap 1 (c): wait at the nearest feasible group when it respawns within (walk + kill time) of the chosen one. false = v18.
+constexpr bool RESPAWN_WAIT_TARGET = false;
+// Gap 1 (a): target value uses walking steps (per-group fields built in leftover fuel at turn end) instead of
+// 1.2 x straight-line distance. false = v18.
+#define WALK_TARGETING 0   // preprocessor switch: 0 compiles exactly v18 (a constexpr flag still changed the wasm)
+constexpr bool WALK_DISTANCE_TARGETING = WALK_TARGETING;
+constexpr std::uint64_t WALK_FIELD_FIRST_GUARD = 35000;   // before the first field is measured (one field ~1k-28k)
+constexpr std::uint64_t WALK_FIELD_MARGIN = 15000;        // periodic-job margin over the largest field measured             // ...within this many tiles       // gold-only groups are worth half (gems win the game)
 
 // ---- Fighting monsters ----------------------------------------------------------------------
 constexpr int RANGED_CAMP_DISTANCE = 3;  // ranged champions shoot monsters from this distance

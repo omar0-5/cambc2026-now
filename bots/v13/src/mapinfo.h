@@ -17,6 +17,11 @@ namespace mapinfo {
 // FUEL: ~150k-400k in total on big maps; a champion turn has 100k (200k on its first turn).
 bool build_step(bool have_plan_thresholds, int plan_d15, int plan_d60);
 bool is_built();
+#if WALK_TARGETING
+// Gap 1 (a): per-group walking fields (steps to stand next to the group), built one per call in leftover fuel.
+void walk_field_step();
+int walk_steps(int group, vec2 from);   // -1 while that group's field is not built; FAR_AWAY if unreachable
+#endif
 void classify_groups_now();   // per-group distances and regions (build() skips it when a plan exists)
 
 // Camp groups, in bc::map::camp_groups() order. Champions update the live fields (world.cpp).

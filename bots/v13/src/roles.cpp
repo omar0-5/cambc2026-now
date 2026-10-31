@@ -611,5 +611,8 @@ void champion_turn() {
             me.champion_name() != bc::champion_type::tavi)
             std::cout << "SHOPLEFT " << bc::to_string(me.champion_name()) << " r" << s.round << " gold " << me.gold_count() << "\n";
     });
+#if WALK_TARGETING
+    mapinfo::walk_field_step();   // gap 1 (a): one field in leftover fuel
+#endif   // gap 1 (a): one field in leftover fuel
     log_turn(s);
 }

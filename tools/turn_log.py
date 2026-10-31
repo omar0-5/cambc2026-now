@@ -128,6 +128,9 @@ def camp_outcomes(turns):
         ep = None
         for i, t in enumerate(ts + [None]):
             if ep and (t is None or t["target"] != ep["g"] or t["state"] == RESPAWNING or t["r"] - ep["last"] > 3):
+                if not ep["damaged"] and ep["seen_live"] and t is not None and t["target"] == ep["g"] and t["state"] == RESPAWNING and \
+                        not any(ep["start"] <= r <= t["r"] + 1 for r in captures[ep["g"]]):
+                    out.append((champ, ep["g"], "target taken before we arrived"))
                 if ep["damaged"]:
                     last = ep["last"]
                     ours = any(ep["start"] <= r <= last + 8 for r in captures[ep["g"]])
@@ -145,9 +148,10 @@ def camp_outcomes(turns):
             if t is None:
                 break
             if t["target"] >= 0 and (ep is None):
-                ep = {"g": t["target"], "start": t["r"], "last": t["r"], "damaged": False}
+                ep = {"g": t["target"], "start": t["r"], "last": t["r"], "damaged": False, "seen_live": False}
             if ep:
                 ep["last"] = t["r"]
+                ep["seen_live"] = ep["seen_live"] or t["state"] in (1, 2)   # alive or reward waiting
                 if t["hit"] and t["detail"] in CAMP_DETAILS:
                     ep["damaged"] = True
     return out
@@ -178,6 +182,9 @@ def report(names):
         for champ, xs in sorted(per_champ.items()):
             print(champ[:13].ljust(14) + "".join(f"{mean(x[c] for x in xs):10.1f}" for c in CATS))
         tot = sum(outcomes.values())
+        taken = outcomes.pop("target taken before we arrived", 0)
+        tot = sum(outcomes.values())
+        print(f"  chosen targets taken by the enemy before we arrived: {taken} ({taken / max(1, len(logs)):.1f} per game)")
         print(f"  camp damage episodes {tot}: " + ", ".join(f"{k} {v} ({100 * v / max(1, tot):.0f}%)" for k, v in outcomes.most_common()))
         if stats:
             print(f"  gems by r1000 {mean(s['gems_r1000'] for s in stats):.0f}, camps/100 rounds "

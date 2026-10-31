@@ -130,10 +130,15 @@ std::vector<const CampNow*> live_camps_of_group_visible(const Snapshot& s, int g
     return out;
 }
 
+int g_wait_group = NO_GROUP;   // gap 1 (c): a respawning group we chose to wait at (not "finished" while it respawns)
+
 bool target_finished(const Snapshot& s, int g) {
     if (g < 0 || g >= static_cast<int>(mapinfo::groups().size())) return true;
     if (avoided(g)) return true;
     const GroupInfo& gr = mapinfo::groups()[static_cast<std::size_t>(g)];
+    if constexpr (RESPAWN_WAIT_TARGET) {
+        if (g == g_wait_group && gr.state == GroupState::Respawning) return false;
+    }
     return gr.state == GroupState::Respawning && gr.respawn_ready_round - s.round > RESPAWN_HOLD;
 }
 
@@ -189,6 +194,16 @@ bool group_feasible(const GroupInfo& g, const SquadStats& squad) {
     return hitting * (g.max_attack_range + 1) <= RETREAT_HEALTH * squad.tank_max_health;
 }
 
+// Rounds to walk to a group: 1.2 x straight-line distance (v18), or 1.2 x walking steps once gap 1 (a)'s
+// field for the group exists.
+inline double walk_rounds(const GroupInfo& g, const Snapshot& s) {
+#if WALK_TARGETING
+    const int steps = mapinfo::walk_steps(g.index, s.me);
+    if (steps >= 0) return 1.2 * static_cast<double>(steps);
+#endif
+    return 1.2 * static_cast<double>(g.centre.chebyshev_distance(s.me));
+}
+
 #if LEVEL2
 // V(g)'s two parts: the (weighted) reward and the rounds it takes. Step d reuses both in Q(a).
 double group_rounds(const GroupInfo& g, const SquadStats& squad, const Snapshot& s, double* reward_out) {
@@ -199,7 +214,7 @@ double group_rounds(const GroupInfo& g, const SquadStats& squad, const Snapshot&
     // the middle becomes "the enemy owns the middle" (match 8d0f4189: two mid altars, we drifted home).
     if (g.in_middle_band && s.banked_us >= s.banked_them - MIDDLE_BEHIND_GEMS) reward *= MIDDLE_CONTEST_BONUS;
     const Cost c = cost_of(g, squad);
-    const double walk = 1.2 * static_cast<double>(g.centre.chebyshev_distance(s.me));
+    const double walk = walk_rounds(g, s);
     double wait = 0;
     if (g.state == GroupState::Respawning) wait = std::max(0.0, g.respawn_ready_round - s.round - walk);
     // Each tank health bar spent = one recall home and the walk back to this group.
@@ -224,7 +239,7 @@ double group_value(const GroupInfo& g, const SquadStats& squad, const Snapshot& 
     // the middle becomes "the enemy owns the middle" (match 8d0f4189: two mid altars, we drifted home).
     if (g.in_middle_band && s.banked_us >= s.banked_them - MIDDLE_BEHIND_GEMS) reward *= MIDDLE_CONTEST_BONUS;
     const Cost c = cost_of(g, squad);
-    const double walk = 1.2 * static_cast<double>(g.centre.chebyshev_distance(s.me));
+    const double walk = walk_rounds(g, s);
     double wait = 0;
     if (g.state == GroupState::Respawning) wait = std::max(0.0, g.respawn_ready_round - s.round - walk);
     // Each tank health bar spent = one recall home and the walk back to this group.
@@ -264,7 +279,12 @@ bool zone_rule_allows(const GroupInfo& g, const Snapshot& s) {
 double value_upper_bound(const GroupInfo& g, const Snapshot& s) {
     double reward = g.gems + LAMBDA_GEMS_PER_GOLD * g.gold;
     if (g.gems == 0) reward *= GOLD_ONLY_FACTOR;
-    const double walk = 1.2 * static_cast<double>(g.centre.chebyshev_distance(s.me));
+    double walk = 1.2 * static_cast<double>(g.centre.chebyshev_distance(s.me));
+    if constexpr (WALK_DISTANCE_TARGETING) {   // (a): stay a lower bound of walk_rounds (fields measure to the group's edge)
+        long radius = 0;
+        for (vec2 t : g.tiles) radius = std::max<long>(radius, t.chebyshev_distance(g.centre));
+        walk = 1.2 * static_cast<double>(std::max<long>(0, g.centre.chebyshev_distance(s.me) - radius - 1));
+    }
     return reward / std::max(1.0, walk + CAPTURE_ROUNDS);
 }
 
@@ -350,6 +370,32 @@ bool join_is_better(const Snapshot& s, int squad, int join, int alone) {
     return group_value(g, together, s) > apart;
 }
 
+// Gap 1 (c): when the nearest feasible group respawns before we could walk to and kill the chosen one, wait at
+// the nearest instead. 49% of v18's choices walked 5+ tiles past the nearest feasible group, 62% of those
+// because it was respawning (farm-test logs, Oct 31).
+int respawn_wait_choice(const Snapshot& s, const SquadStats& st, const std::vector<int>& claimed, int best) {
+    const auto& gs = mapinfo::groups();
+    if (g_wait_group != NO_GROUP && gs[static_cast<std::size_t>(g_wait_group)].state != GroupState::Respawning) g_wait_group = NO_GROUP;
+    if (best == NO_GROUP) return best;
+    int near = NO_GROUP;
+    long near_d = 1L << 30;
+    for (const GroupInfo& g : gs) {
+        if (contains(claimed, g.index) || !group_feasible(g, st) || !zone_rule_allows(g, s)) continue;
+        const long d = g.centre.chebyshev_distance(s.me);
+        if (d < near_d) near_d = d, near = g.index;
+    }
+    if (near == NO_GROUP || near == best) return best;
+    const GroupInfo& n = gs[static_cast<std::size_t>(near)];
+    if (n.state != GroupState::Respawning || n.respawn_ready_round <= s.round) return best;
+    const GroupInfo& b = gs[static_cast<std::size_t>(best)];
+    const double alternative = 1.2 * static_cast<double>(b.centre.chebyshev_distance(s.me)) + cost_of(b, st).kill_time;
+    if (n.respawn_ready_round - s.round > alternative) return best;
+    g_wait_group = near;
+    if constexpr (LOG_TURNS) std::cout << "RWAIT " << s.round << " " << bc::to_string(s.my_type) << " wait g" << near << " in "
+                                       << n.respawn_ready_round - s.round << " instead of g" << best << " (" << alternative << ")" << std::endl;
+    return near;
+}
+
 int choose_target(const Snapshot& s, int squad) {
     // v12 harassment merge: while an enemy kill squad is taking us apart (match 8d0f4189: 21 deaths
     // with the pair farming alone across the map), squad 1 farms squad 0's group - five bodies are
@@ -397,6 +443,7 @@ int choose_target(const Snapshot& s, int squad) {
     int best = best_group(s, st, claimed, true, false);
     if (best == NO_GROUP) best = best_group(s, st, claimed, false, false);   // anything we can take
 #endif
+    if constexpr (RESPAWN_WAIT_TARGET) best = respawn_wait_choice(s, st, claimed, best);
     const int join = comms::squad_target(0);
     if (squad != 0 && join != NO_GROUP && join != best && join_is_better(s, squad, join, best)) best = join;
     return best;
@@ -758,6 +805,14 @@ int side_job(const Snapshot& s, int squad_goal) {
         const GroupInfo& g = mapinfo::groups()[static_cast<std::size_t>(index)];
         if (contains(claimed, g.index)) continue;
         if (g.centre.chebyshev_distance(s.me) > SIDE_JOB_RANGE) continue;
+        if constexpr (SIDE_JOB_HYSTERESIS) {   // (b): only side jobs on the way to the main target
+            // shortcut: straight-line detour; use walking fields once (a) caches them per group.
+            if (squad_goal != NO_GROUP) {
+                const vec2 goal = mapinfo::groups()[static_cast<std::size_t>(squad_goal)].centre;
+                const long detour = g.centre.chebyshev_distance(s.me) + g.centre.chebyshev_distance(goal) - goal.chebyshev_distance(s.me);
+                if (detour > SIDE_JOB_MAX_DETOUR) continue;
+            }
+        }
         if (g.state == GroupState::Respawning) continue;
         if (!group_feasible(g, solo) || !zone_rule_allows(g, s)) continue;
         const double v = group_value(g, solo, s);
@@ -768,17 +823,41 @@ int side_job(const Snapshot& s, int squad_goal) {
 
 }  // namespace
 
+// Gap 1 (b): the side job in progress (NO_GROUP = none). Without hysteresis the main target and a side job
+// alternated every turn, 71% of the time ending on the same tile (farm-test logs, Oct 31).
+int g_side_job = NO_GROUP;
+
 bool farm_step(Snapshot& s) {
     int target = squad_target(s);
     if (s.role == Role::Farmer) target = split_target(s, target);
     g_current_group = target;
     if (target == NO_GROUP) return false;
+    if constexpr (SIDE_JOB_HYSTERESIS) {
+        if (g_side_job != NO_GROUP) {
+            const GroupInfo& main = mapinfo::groups()[static_cast<std::size_t>(target)];
+            const bool main_close = !avoided(target) && main.state != GroupState::Respawning &&
+                                    main.centre.chebyshev_distance(s.me) <= SIDE_JOB_MAIN_CLOSE;
+            if (g_side_job == target || main_close || target_finished(s, g_side_job)) {
+                g_side_job = NO_GROUP;
+            } else {
+                g_current_group = g_side_job;
+                if (work_on_group(s, g_side_job)) return true;
+                g_side_job = NO_GROUP;   // the side job cannot be worked any more: back to the main target
+                g_current_group = target;
+            }
+        }
+    }
     if (!avoided(target) && work_on_group(s, target)) return true;
     // Step 0: the side-job scan costs ~30k; without fuel left to act on it the turn ran out (00lanes).
     if (!SIDE_JOBS || s.health < 0.6 * s.max_health || bc::fuel_remaining() < FUEL_FOR_SIDE_JOB) return false;
     const int side = side_job(s, target);
     if (side == NO_GROUP) return false;
     g_current_group = side;
+    if constexpr (SIDE_JOB_HYSTERESIS) {
+        const bool worked = work_on_group(s, side);
+        if (worked) g_side_job = side;
+        return worked;
+    }
     return work_on_group(s, side);
 }
 

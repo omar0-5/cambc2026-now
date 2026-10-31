@@ -31,6 +31,11 @@ struct MapData {
     bool any_gate = false;
     std::vector<std::uint8_t> wall_bits;        // walls | holes | altars, row-major bits
     bc::bitboard safe_altar_ring;               // altar ring of altars outside the enemy zone
+#if WALK_TARGETING
+    std::vector<std::vector<std::uint16_t>> walk_fields;   // gap 1 (a): index = group, empty until built
+    std::vector<int> walk_order;                           // groups nearest to our spawn first
+    std::uint64_t max_walk_field_cost = 0;
+#endif
     bool thresholds_set = false;
     int d15 = 0, d60 = 0, home_to_altar = FAR_AWAY;
     // Group setup resumes across turns: the last group in `groups` is unfinished while edge_tile >= 0.
@@ -349,6 +354,44 @@ bool build_step(bool have_plan_thresholds, int plan_d15, int plan_d60) {
 }
 
 bool is_built() { return data().built; }
+
+#if WALK_TARGETING
+void walk_field_step() {
+    MapData& d = data();
+    if (!d.built) return;
+    if (d.walk_fields.empty()) {
+        d.walk_fields.resize(d.groups.size());
+        for (const GroupInfo& g : d.groups) d.walk_order.push_back(g.index);
+        std::sort(d.walk_order.begin(), d.walk_order.end(),
+                  [&](int a, int b) { return d.groups[static_cast<std::size_t>(a)].steps_from_us < d.groups[static_cast<std::size_t>(b)].steps_from_us; });
+    }
+    for (int i : d.walk_order) {
+        auto& field = d.walk_fields[static_cast<std::size_t>(i)];
+        if (!field.empty()) continue;
+        // Adaptive guard (fix A pattern): the largest field measured this game + margin.
+        const std::uint64_t guard = d.max_walk_field_cost ? d.max_walk_field_cost + WALK_FIELD_MARGIN : WALK_FIELD_FIRST_GUARD;
+        const std::uint64_t before = bc::fuel_remaining();
+        if (before < guard) return;
+        const GroupInfo& g = d.groups[static_cast<std::size_t>(i)];
+        const bc::bitboard walls = d.terrain_blocked | d.camp_spawns;
+        bc::bitboard roots;
+        roots.clear();
+        for (vec2 t : g.tiles) roots.draw_chebyshev(t, 1.0f);
+        field = compute_field(walls, roots & ~walls);
+        if (field.empty()) field.assign(1, bc::distance_field::unreachable);   // nothing to stand on: mark built
+        d.max_walk_field_cost = std::max(d.max_walk_field_cost, before - bc::fuel_remaining());
+        return;   // one field per call
+    }
+}
+
+int walk_steps(int group, vec2 from) {
+    const MapData& d = data();
+    if (group < 0 || static_cast<std::size_t>(group) >= d.walk_fields.size()) return -1;
+    const auto& field = d.walk_fields[static_cast<std::size_t>(group)];
+    if (field.size() != static_cast<std::size_t>(d.width * d.height)) return field.empty() ? -1 : FAR_AWAY;
+    return read_distance(field, from);
+}
+#endif
 void classify_groups_now() { classify_groups(); }
 float exposure(const GroupInfo& g, vec2 tile) { return exposure_at(g, tile); }
 
