@@ -23,6 +23,7 @@ Full rules: `docs/GameRules.md`. C++ API: `docs/BotAPICpp.md` (large: search it,
 
 | Submitted (UTC) | Version | Code | Elo / rank at submission | Elo / rank later | Notes |
 | --- | --- | --- | --- | --- | --- |
+| (pending) | v21 | v20 + `SHOP_TOP_BUILD` (top teams' Bruiser + Durability Health build); local vs ganker + v15-baseline, both halves: 158 vs 145 wins, deaths and death time down, damage ratio up, overruns 502 vs 556 | | | submit copy `replays/submit/v21` |
 | 2026-10-31 ~09:05 | v20 | v18 + side-job hysteresis (2b4ce69, tag `ladder-v19`) | 1,529 / #388 (Oct 31 morning, v18) | 1,571 / #346 (Oct 31, user) | live 09:12; fallback |
 | 2026-10-31 (earlier) | v18 | step c + fix A (7d64cac) | — | 1,529 / #388 | previous fallback |
 
