@@ -23,7 +23,8 @@ Full rules: `docs/GameRules.md`. C++ API: `docs/BotAPICpp.md` (large: search it,
 
 | Submitted (UTC) | Version | Code | Elo / rank at submission | Elo / rank later | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 2026-10-31 ~10:35 | v22 | v21 + `HOR_SHIELD_EAGER` + `HOR_FOCUS_BUILD` (local: no gain, 143 vs 145 on v19) | 1,552 / #365 (10:37, v21 live) | | scrims slightly worse than v21 on every metric → roll back to v21 |
+| 2026-10-31 ~12:08 | v23 | v21 + `MARCELLA_CAPTURES` + `EARLY_GOLD_ROUNDS` 400 + ally `is_visible` fix; local 199 vs 158 wins (both halves, ganker + v15-baseline) | 1,524 / #393 (12:10, v21 live after v22 rollback) | | |
+| 2026-10-31 ~10:35 | v22 | v21 + `HOR_SHIELD_EAGER` + `HOR_FOCUS_BUILD` (local: no gain, 143 vs 145 on v19) | 1,552 / #365 (10:37, v21 live) | | scrims slightly worse than v21 on every metric → rolled back to v21 (Elo 1,552 → 1,524 by 12:10) |
 | 2026-10-31 ~10:05 | v21 | v20 + `SHOP_TOP_BUILD` (top teams' Bruiser + Durability Health build); local vs ganker + v15-baseline, both halves: 158 vs 145 wins, deaths and death time down, damage ratio up, overruns 502 vs 556 | 1,555 / #360 (10:10, v20 live) | | live 10:14; scrims slightly better than v20 → new fallback; submit copy `replays/submit/v21` |
 | 2026-10-31 ~09:05 | v20 | v18 + side-job hysteresis (2b4ce69, tag `ladder-v19`) | 1,529 / #388 (Oct 31 morning, v18) | 1,571 / #346 (Oct 31, user) | live 09:12; fallback |
 | 2026-10-31 (earlier) | v18 | step c + fix A (7d64cac) | — | 1,529 / #388 | previous fallback |
